@@ -9,18 +9,27 @@
   "files": [
     "dist",
     "skills",
+    "schema",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "tsx --test tests/*.test.ts",
-    "check": "pnpm test && pnpm build"
+    "check": "pnpm test && pnpm build",
+    "prepack": "pnpm build"
   },
   "engines": {
     "node": ">=22"
   },
   "license": "MIT",
+  "keywords": [
+    "ai-agents",
+    "cli",
+    "pi",
+    "primitives",
+    "tool-use"
+  ],
   "devDependencies": {
     "@types/node": "^22.0.0",
     "tsx": "^4.20.0",
