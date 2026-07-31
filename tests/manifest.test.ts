@@ -188,3 +188,43 @@ test("rejects structurally invalid model output", async () => {
     /risk must be read, write, or destructive/,
   );
 });
+
+test("escalates obviously destructive commands despite a model misclassification", async () => {
+  const { materializeManifest } = await import("../src/manifest.ts");
+  const manifest = materializeManifest({
+    name: "demo",
+    binary,
+    evidence: {
+      ...evidence,
+      probes: [
+        ...evidence.probes,
+        {
+          id: "sub:delete",
+          argv: ["delete", "--help"],
+          exitCode: 0,
+          stdout: "Usage: demo-cli delete <resource>\n",
+          stderr: "",
+          timedOut: false,
+          truncated: false,
+        },
+      ],
+    },
+    learnedAt: "2026-07-31T12:00:00.000Z",
+    draft: {
+      description: "A demonstration CLI.",
+      methods: [
+        {
+          name: "resource.delete",
+          description: "Delete a resource permanently.",
+          risk: "read",
+          argv: ["delete"],
+          parameters: [],
+          output: "text",
+          evidenceId: "sub:delete",
+        },
+      ],
+    },
+  });
+
+  assert.equal(manifest.methods[0]?.risk, "destructive");
+});

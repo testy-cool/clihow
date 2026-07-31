@@ -1,5 +1,4 @@
-import { createHash } from "node:crypto";
-import { createReadStream } from "node:fs";
+import { assertBinaryUnchanged } from "./binary.js";
 import { runProcess } from "./process.js";
 import type {
   MethodParameter,
@@ -123,17 +122,6 @@ export function buildMethodArgv(
   return argv;
 }
 
-async function sha256(path: string): Promise<string> {
-  const hash = createHash("sha256");
-  await new Promise<void>((resolveHash, reject) => {
-    const stream = createReadStream(path);
-    stream.on("data", (chunk) => hash.update(chunk));
-    stream.on("error", reject);
-    stream.on("end", resolveHash);
-  });
-  return hash.digest("hex");
-}
-
 export async function executeMethod(
   manifest: PrimitiveManifest,
   methodName: string,
@@ -143,12 +131,7 @@ export async function executeMethod(
   const method = manifest.methods.find((candidate) => candidate.name === methodName);
   if (!method) throw new Error(`Unknown method: ${manifest.name}.${methodName}`);
   const argv = buildMethodArgv(method, args);
-  const currentHash = await sha256(manifest.binary.path);
-  if (currentHash !== manifest.binary.sha256) {
-    throw new Error(
-      `Binary drift detected for ${manifest.name}; run cmdmint learn again`,
-    );
-  }
+  await assertBinaryUnchanged(manifest.binary, manifest.name);
   if (!options.dryRun && method.risk !== "read" && !options.yes) {
     throw new Error(
       `Method ${manifest.name}.${method.name} is ${method.risk}; pass --yes to execute it`,

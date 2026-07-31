@@ -1,9 +1,8 @@
-import { createHash } from "node:crypto";
 import { access, mkdtemp, realpath, rm, stat } from "node:fs/promises";
-import { createReadStream } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, isAbsolute, join, resolve, sep } from "node:path";
 import { constants } from "node:fs";
+import { sha256File } from "./binary.js";
 import { materializeManifest } from "./manifest.js";
 import { compileWithPi } from "./pi.js";
 import { runProcess, type ProcessResult } from "./process.js";
@@ -49,17 +48,6 @@ async function resolveExecutable(binary: string): Promise<string> {
     }
   }
   throw new Error(`Executable not found: ${binary}`);
-}
-
-async function sha256(path: string): Promise<string> {
-  const hash = createHash("sha256");
-  await new Promise<void>((resolveHash, reject) => {
-    const stream = createReadStream(path);
-    stream.on("data", (chunk) => hash.update(chunk));
-    stream.on("error", reject);
-    stream.on("end", resolveHash);
-  });
-  return hash.digest("hex");
 }
 
 function isolatedEnvironment(directory: string): NodeJS.ProcessEnv {
@@ -145,7 +133,7 @@ async function identifyBinary(
     requested,
     path,
     version,
-    sha256: await sha256(path),
+    sha256: await sha256File(path),
     size: metadata.size,
     mtimeMs: metadata.mtimeMs,
   };

@@ -3,6 +3,8 @@ import type {
   EvidenceBundle,
   PrimitiveDraft,
   PrimitiveManifest,
+  PrimitiveMethodDraft,
+  Risk,
 } from "./types.js";
 
 interface MaterializeManifestInput {
@@ -110,6 +112,56 @@ function assertPrimitiveDraft(value: unknown): asserts value is PrimitiveDraft {
   }
 }
 
+function escalatedRisk(method: PrimitiveMethodDraft): Risk {
+  const words = `${method.name} ${method.argv.join(" ")}`
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+  const destructive = new Set([
+    "clear",
+    "del",
+    "delete",
+    "destroy",
+    "drop",
+    "erase",
+    "kill",
+    "purge",
+    "remove",
+    "reset",
+    "revoke",
+    "rm",
+    "terminate",
+    "wipe",
+  ]);
+  if (words.some((word) => destructive.has(word))) return "destructive";
+  if (method.risk !== "read") return method.risk;
+  const write = new Set([
+    "add",
+    "apply",
+    "commit",
+    "create",
+    "deploy",
+    "disable",
+    "edit",
+    "enable",
+    "install",
+    "merge",
+    "publish",
+    "push",
+    "restart",
+    "send",
+    "set",
+    "start",
+    "stop",
+    "submit",
+    "uninstall",
+    "update",
+    "upload",
+    "write",
+  ]);
+  return words.some((word) => write.has(word)) ? "write" : "read";
+}
+
 export function materializeManifest(
   input: MaterializeManifestInput,
 ): PrimitiveManifest {
@@ -154,6 +206,7 @@ export function materializeManifest(
 
     return {
       ...method,
+      risk: escalatedRisk(method),
       probe: {
         argv: [...evidence.argv],
         expectExit: evidence.exitCode === null ? [0] : [evidence.exitCode],
