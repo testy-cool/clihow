@@ -228,3 +228,39 @@ test("escalates obviously destructive commands despite a model misclassification
 
   assert.equal(manifest.methods[0]?.risk, "destructive");
 });
+
+test("rejects the executable name inside a root-level argv", async () => {
+  const { materializeManifest } = await import("../src/manifest.ts");
+
+  assert.throws(
+    () =>
+      materializeManifest({
+        name: "demo",
+        binary,
+        evidence: {
+          ...evidence,
+          probes: evidence.probes.map((probe) =>
+            probe.id === "root"
+              ? { ...probe, stdout: "Usage: demo-cli [options]\n" }
+              : probe,
+          ),
+        },
+        learnedAt: "2026-07-31T12:00:00.000Z",
+        draft: {
+          description: "A demonstration CLI.",
+          methods: [
+            {
+              name: "root",
+              description: "Run the root operation.",
+              risk: "read",
+              argv: ["demo-cli"],
+              parameters: [],
+              output: "text",
+              evidenceId: "root",
+            },
+          ],
+        },
+      }),
+    /Root method root must not include executable demo-cli in argv/,
+  );
+});

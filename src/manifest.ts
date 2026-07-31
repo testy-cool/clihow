@@ -1,3 +1,4 @@
+import { basename } from "node:path";
 import type {
   BinaryIdentity,
   EvidenceBundle,
@@ -177,6 +178,24 @@ export function materializeManifest(
     const evidencePrefix = evidence.argv.filter(
       (token) => token !== "--help" && token !== "-h",
     );
+    if (method.evidenceId === "root" && method.argv[0]) {
+      const executableNames = new Set(
+        [
+          input.binary.requested,
+          input.binary.path,
+          input.evidence.requestedBinary,
+          input.evidence.resolvedPath,
+        ].flatMap((value) => {
+          const filename = basename(value);
+          return [filename, filename.replace(/\.[^.]+$/, "")];
+        }),
+      );
+      if (executableNames.has(method.argv[0])) {
+        throw new Error(
+          `Root method ${method.name} must not include executable ${method.argv[0]} in argv`,
+        );
+      }
+    }
     for (const [index, token] of evidencePrefix.entries()) {
       if (method.argv[index] !== token) {
         throw new Error(

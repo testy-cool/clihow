@@ -50,6 +50,8 @@ Learning performs only version and help probes in a temporary working directory,
 
 The manifest is saved only after its help probes pass.
 
+If the first candidate fails deterministic validation, `cmdmint` gives Pi the exact validator error and allows one correction pass. It never relaxes the validator or executes the rejected candidate.
+
 ### Discover methods
 
 ```bash
