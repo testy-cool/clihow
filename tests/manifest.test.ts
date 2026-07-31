@@ -159,3 +159,32 @@ test("rejects a model-invented option parameter", async () => {
     /--erase.*not present in sub:greet/,
   );
 });
+
+test("rejects structurally invalid model output", async () => {
+  const { materializeManifest } = await import("../src/manifest.ts");
+
+  assert.throws(
+    () =>
+      materializeManifest({
+        name: "demo",
+        binary,
+        evidence,
+        learnedAt: "2026-07-31T12:00:00.000Z",
+        draft: {
+          description: "A harmless demonstration CLI.",
+          methods: [
+            {
+              name: "greet",
+              description: "Greet one person.",
+              risk: "omniscient",
+              argv: ["greet"],
+              parameters: [],
+              output: "text",
+              evidenceId: "sub:greet",
+            },
+          ],
+        } as never,
+      }),
+    /risk must be read, write, or destructive/,
+  );
+});

@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { readFile, stat } from "node:fs/promises";
 import test from "node:test";
-import type { PrimitiveMethod } from "../src/types.ts";
+import { fileURLToPath } from "node:url";
+import type { PrimitiveManifest, PrimitiveMethod } from "../src/types.ts";
+
+const fixturePath = fileURLToPath(
+  new URL("../fixtures/demo-cli.mjs", import.meta.url),
+);
 
 const greetMethod: PrimitiveMethod = {
   name: "greet",
@@ -29,6 +36,34 @@ const greetMethod: PrimitiveMethod = {
   evidenceId: "sub:greet",
   probe: { argv: ["greet", "--help"], expectExit: [0] },
 };
+
+async function fixtureManifest(
+  method: PrimitiveMethod = greetMethod,
+): Promise<PrimitiveManifest> {
+  const contents = await readFile(fixturePath);
+  const metadata = await stat(fixturePath);
+  return {
+    schemaVersion: 1,
+    name: "demo",
+    description: "Demo primitive.",
+    binary: {
+      requested: "demo-cli",
+      path: fixturePath,
+      version: "demo-cli 1.0.0",
+      sha256: createHash("sha256").update(contents).digest("hex"),
+      size: metadata.size,
+      mtimeMs: metadata.mtimeMs,
+    },
+    learnedAt: "2026-07-31T12:00:00.000Z",
+    engine: {
+      kind: "pi",
+      provider: "openai-codex",
+      model: "gpt-5.6-luna",
+      thinking: "high",
+    },
+    methods: [method],
+  };
+}
 
 test("binds validated arguments without creating a shell command", async () => {
   const invokeModule = await import(
@@ -95,5 +130,38 @@ test("rejects arguments not declared by the learned method", async () => {
   assert.throws(
     () => buildMethodArgv(greetMethod, { name: "Ada", shell: "rm -rf" }),
     /Unknown argument: shell/,
+  );
+});
+
+test("executes a learned method through its exact binary and argv", async () => {
+  const { executeMethod } = await import("../src/invoke.ts");
+  const manifest = await fixtureManifest();
+
+  const result = await executeMethod(manifest, "greet", { name: "Ada" });
+
+  assert.equal(result.executed, true);
+  assert.deepEqual(result.argv, ["greet", "Ada"]);
+  assert.equal(result.stdout, "Hello, Ada!\n");
+  assert.equal(result.exitCode, 0);
+});
+
+test("refuses a state-changing method without explicit approval", async () => {
+  const { executeMethod } = await import("../src/invoke.ts");
+  const manifest = await fixtureManifest({ ...greetMethod, risk: "write" });
+
+  await assert.rejects(
+    executeMethod(manifest, "greet", { name: "Ada" }),
+    /is write; pass --yes to execute it/,
+  );
+});
+
+test("refuses execution after the learned binary changes", async () => {
+  const { executeMethod } = await import("../src/invoke.ts");
+  const manifest = await fixtureManifest();
+  manifest.binary.sha256 = "0".repeat(64);
+
+  await assert.rejects(
+    executeMethod(manifest, "greet", { name: "Ada" }),
+    /Binary drift detected.*run cmdmint learn again/,
   );
 });

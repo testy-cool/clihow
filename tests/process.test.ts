@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
 test("exports a bounded process runner", async () => {
@@ -53,4 +56,26 @@ test("truncates captured output at the configured byte limit", async () => {
   assert.equal(Buffer.byteLength(result.stdout), 16);
   assert.equal(Buffer.byteLength(result.stderr), 16);
   assert.equal(result.truncated, true);
+});
+
+test("runs inside the supplied directory and environment", async () => {
+  const { runProcess } = await import("../src/process.ts");
+  const cwd = await mkdtemp(join(tmpdir(), "cmdmint-process-"));
+  try {
+    const result = await runProcess(
+      process.execPath,
+      [
+        "-e",
+        "process.stdout.write(JSON.stringify({cwd: process.cwd(), value: process.env.CMDMINT_TEST_VALUE}))",
+      ],
+      {
+        cwd,
+        env: { PATH: process.env.PATH ?? "", CMDMINT_TEST_VALUE: "isolated" },
+      },
+    );
+
+    assert.deepEqual(JSON.parse(result.stdout), { cwd, value: "isolated" });
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
 });

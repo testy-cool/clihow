@@ -14,6 +14,8 @@ export interface ProcessResult {
 }
 
 export interface ProcessOptions {
+  cwd?: string;
+  env?: NodeJS.ProcessEnv;
   maxOutputBytes?: number;
   timeoutMs?: number;
 }
@@ -29,7 +31,9 @@ export async function runProcess(
 
   return await new Promise<ProcessResult>((resolve, reject) => {
     const child = spawn(command, argv, {
+      cwd: options.cwd,
       detached: process.platform !== "win32",
+      env: options.env,
       shell: false,
       stdio: ["ignore", "pipe", "pipe"],
     });

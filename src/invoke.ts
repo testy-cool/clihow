@@ -1,6 +1,36 @@
-import type { MethodParameter, PrimitiveMethod } from "./types.js";
+import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { runProcess } from "./process.js";
+import type {
+  MethodParameter,
+  PrimitiveManifest,
+  PrimitiveMethod,
+  Risk,
+} from "./types.js";
 
 export type MethodArguments = Record<string, unknown>;
+
+export interface ExecuteMethodOptions {
+  dryRun?: boolean;
+  timeoutMs?: number;
+  yes?: boolean;
+}
+
+export interface InvocationResult {
+  primitive: string;
+  method: string;
+  risk: Risk;
+  command: string;
+  argv: string[];
+  executed: boolean;
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  signal: NodeJS.Signals | null;
+  durationMs: number;
+  timedOut: boolean;
+  truncated: boolean;
+}
 
 function valueFor(
   parameter: MethodParameter,
@@ -91,4 +121,74 @@ export function buildMethodArgv(
   }
 
   return argv;
+}
+
+async function sha256(path: string): Promise<string> {
+  const hash = createHash("sha256");
+  await new Promise<void>((resolveHash, reject) => {
+    const stream = createReadStream(path);
+    stream.on("data", (chunk) => hash.update(chunk));
+    stream.on("error", reject);
+    stream.on("end", resolveHash);
+  });
+  return hash.digest("hex");
+}
+
+export async function executeMethod(
+  manifest: PrimitiveManifest,
+  methodName: string,
+  args: MethodArguments,
+  options: ExecuteMethodOptions = {},
+): Promise<InvocationResult> {
+  const method = manifest.methods.find((candidate) => candidate.name === methodName);
+  if (!method) throw new Error(`Unknown method: ${manifest.name}.${methodName}`);
+  const argv = buildMethodArgv(method, args);
+  const currentHash = await sha256(manifest.binary.path);
+  if (currentHash !== manifest.binary.sha256) {
+    throw new Error(
+      `Binary drift detected for ${manifest.name}; run cmdmint learn again`,
+    );
+  }
+  if (!options.dryRun && method.risk !== "read" && !options.yes) {
+    throw new Error(
+      `Method ${manifest.name}.${method.name} is ${method.risk}; pass --yes to execute it`,
+    );
+  }
+  if (options.dryRun) {
+    return {
+      primitive: manifest.name,
+      method: method.name,
+      risk: method.risk,
+      command: manifest.binary.path,
+      argv,
+      executed: false,
+      stdout: "",
+      stderr: "",
+      exitCode: null,
+      signal: null,
+      durationMs: 0,
+      timedOut: false,
+      truncated: false,
+    };
+  }
+
+  const result = await runProcess(manifest.binary.path, argv, {
+    maxOutputBytes: 1024 * 1024,
+    timeoutMs: options.timeoutMs ?? 60_000,
+  });
+  return {
+    primitive: manifest.name,
+    method: method.name,
+    risk: method.risk,
+    command: manifest.binary.path,
+    argv,
+    executed: true,
+    stdout: result.stdout,
+    stderr: result.stderr,
+    exitCode: result.exitCode,
+    signal: result.signal,
+    durationMs: result.durationMs,
+    timedOut: result.timedOut,
+    truncated: result.truncated,
+  };
 }

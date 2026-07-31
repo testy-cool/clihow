@@ -10,12 +10,110 @@ interface MaterializeManifestInput {
   binary: BinaryIdentity;
   evidence: EvidenceBundle;
   learnedAt: string;
-  draft: PrimitiveDraft;
+  draft: unknown;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function nonEmptyString(value: unknown, label: string): asserts value is string {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(`${label} must be a non-empty string`);
+  }
+}
+
+function assertPrimitiveDraft(value: unknown): asserts value is PrimitiveDraft {
+  if (!isRecord(value)) throw new Error("Pi output must be a JSON object");
+  nonEmptyString(value.description, "description");
+  if (!Array.isArray(value.methods) || value.methods.length === 0) {
+    throw new Error("methods must be a non-empty array");
+  }
+  if (value.methods.length > 32) throw new Error("methods may contain at most 32 entries");
+
+  const methodNames = new Set<string>();
+  for (const [methodIndex, candidate] of value.methods.entries()) {
+    if (!isRecord(candidate)) throw new Error(`methods[${methodIndex}] must be an object`);
+    nonEmptyString(candidate.name, `methods[${methodIndex}].name`);
+    if (!/^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$/.test(candidate.name)) {
+      throw new Error(`Invalid method name: ${candidate.name}`);
+    }
+    if (methodNames.has(candidate.name)) {
+      throw new Error(`Duplicate method name: ${candidate.name}`);
+    }
+    methodNames.add(candidate.name);
+    nonEmptyString(candidate.description, `Method ${candidate.name} description`);
+    if (!(["read", "write", "destructive"] as unknown[]).includes(candidate.risk)) {
+      throw new Error(`Method ${candidate.name} risk must be read, write, or destructive`);
+    }
+    if (!(["text", "json", "jsonl"] as unknown[]).includes(candidate.output)) {
+      throw new Error(`Method ${candidate.name} output must be text, json, or jsonl`);
+    }
+    nonEmptyString(candidate.evidenceId, `Method ${candidate.name} evidenceId`);
+    if (!Array.isArray(candidate.argv) || candidate.argv.length > 16) {
+      throw new Error(`Method ${candidate.name} argv must be an array of at most 16 strings`);
+    }
+    for (const token of candidate.argv) {
+      if (
+        typeof token !== "string" ||
+        !token ||
+        token.length > 256 ||
+        /[\0\r\n]/.test(token)
+      ) {
+        throw new Error(`Method ${candidate.name} contains an invalid argv token`);
+      }
+    }
+    if (!Array.isArray(candidate.parameters) || candidate.parameters.length > 32) {
+      throw new Error(`Method ${candidate.name} parameters must be an array`);
+    }
+    const parameterNames = new Set<string>();
+    const flags = new Set<string>();
+    const positions = new Set<number>();
+    for (const [parameterIndex, parameter] of candidate.parameters.entries()) {
+      if (!isRecord(parameter)) {
+        throw new Error(`Method ${candidate.name} parameter ${parameterIndex} must be an object`);
+      }
+      nonEmptyString(parameter.name, `Method ${candidate.name} parameter name`);
+      if (!/^[a-z][a-z0-9_]*$/.test(parameter.name)) {
+        throw new Error(`Invalid parameter name: ${parameter.name}`);
+      }
+      if (parameterNames.has(parameter.name)) {
+        throw new Error(`Duplicate parameter name: ${parameter.name}`);
+      }
+      parameterNames.add(parameter.name);
+      nonEmptyString(parameter.description, `Parameter ${parameter.name} description`);
+      if (!(["string", "integer", "number", "boolean", "string[]"] as unknown[]).includes(parameter.type)) {
+        throw new Error(`Parameter ${parameter.name} has an invalid type`);
+      }
+      if (typeof parameter.required !== "boolean") {
+        throw new Error(`Parameter ${parameter.name} required must be boolean`);
+      }
+      if (parameter.kind === "positional") {
+        if (!Number.isInteger(parameter.position) || (parameter.position as number) < 0) {
+          throw new Error(`Parameter ${parameter.name} position must be a non-negative integer`);
+        }
+        if (positions.has(parameter.position as number)) {
+          throw new Error(`Duplicate positional index: ${String(parameter.position)}`);
+        }
+        positions.add(parameter.position as number);
+      } else if (parameter.kind === "option") {
+        nonEmptyString(parameter.flag, `Parameter ${parameter.name} flag`);
+        if (!/^--?[a-zA-Z0-9][a-zA-Z0-9-]*$/.test(parameter.flag)) {
+          throw new Error(`Invalid option flag: ${parameter.flag}`);
+        }
+        if (flags.has(parameter.flag)) throw new Error(`Duplicate option flag: ${parameter.flag}`);
+        flags.add(parameter.flag);
+      } else {
+        throw new Error(`Parameter ${parameter.name} kind must be positional or option`);
+      }
+    }
+  }
 }
 
 export function materializeManifest(
   input: MaterializeManifestInput,
 ): PrimitiveManifest {
+  assertPrimitiveDraft(input.draft);
   const methods = input.draft.methods.map((method) => {
     const evidence = input.evidence.probes.find(
       (candidate) => candidate.id === method.evidenceId,
@@ -36,9 +134,10 @@ export function materializeManifest(
     }
     const helpText = `${evidence.stdout}\n${evidence.stderr}`;
     for (const token of method.argv.slice(evidencePrefix.length)) {
-      if (token.startsWith("-") && !helpText.includes(token)) {
+      if (!helpText.includes(token)) {
+        const kind = token.startsWith("-") ? "Flag" : "Token";
         throw new Error(
-          `Flag ${token} is not present in ${method.evidenceId} help evidence`,
+          `${kind} ${token} is not present in ${method.evidenceId} help evidence`,
         );
       }
     }
