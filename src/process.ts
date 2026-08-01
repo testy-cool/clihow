@@ -17,6 +17,7 @@ export interface ProcessOptions {
   cwd?: string;
   env?: NodeJS.ProcessEnv;
   maxOutputBytes?: number;
+  stdio?: "capture" | "inherit";
   timeoutMs?: number;
 }
 
@@ -28,14 +29,17 @@ export async function runProcess(
   const startedAt = performance.now();
   const timeoutMs = options.timeoutMs ?? 30_000;
   const maxOutputBytes = options.maxOutputBytes ?? 256 * 1024;
+  const inheritStdio = options.stdio === "inherit";
 
   return await new Promise<ProcessResult>((resolve, reject) => {
     const child = spawn(command, argv, {
       cwd: options.cwd,
-      detached: process.platform !== "win32",
+      detached: !inheritStdio && process.platform !== "win32",
       env: options.env,
       shell: false,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: inheritStdio
+        ? ["inherit", "inherit", "inherit"]
+        : ["ignore", "pipe", "pipe"],
     });
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
@@ -56,7 +60,7 @@ export async function runProcess(
       child.kill("SIGKILL");
     }, timeoutMs);
 
-    child.stdout.on("data", (chunk: Buffer) => {
+    child.stdout?.on("data", (chunk: Buffer) => {
       const remaining = Math.max(0, maxOutputBytes - stdoutBytes);
       if (chunk.length > remaining) truncated = true;
       if (remaining > 0) {
@@ -65,7 +69,7 @@ export async function runProcess(
         stdoutBytes += kept.length;
       }
     });
-    child.stderr.on("data", (chunk: Buffer) => {
+    child.stderr?.on("data", (chunk: Buffer) => {
       const remaining = Math.max(0, maxOutputBytes - stderrBytes);
       if (chunk.length > remaining) truncated = true;
       if (remaining > 0) {

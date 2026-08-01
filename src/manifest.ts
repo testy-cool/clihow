@@ -29,6 +29,11 @@ function nonEmptyString(value: unknown, label: string): asserts value is string 
 function assertPrimitiveDraft(value: unknown): asserts value is PrimitiveDraft {
   if (!isRecord(value)) throw new Error("Pi output must be a JSON object");
   nonEmptyString(value.description, "description");
+  if (value.ask !== undefined) {
+    if (!isRecord(value.ask)) throw new Error("ask must be an object");
+    nonEmptyString(value.ask.method, "ask.method");
+    nonEmptyString(value.ask.parameter, "ask.parameter");
+  }
   if (!Array.isArray(value.methods) || value.methods.length === 0) {
     throw new Error("methods must be a non-empty array");
   }
@@ -105,6 +110,11 @@ function assertPrimitiveDraft(value: unknown): asserts value is PrimitiveDraft {
           throw new Error(`Invalid option flag: ${parameter.flag}`);
         }
         if (flags.has(parameter.flag)) throw new Error(`Duplicate option flag: ${parameter.flag}`);
+        if (candidate.argv.includes(parameter.flag)) {
+          throw new Error(
+            `Option flag ${parameter.flag} appears in both fixed argv and parameter ${parameter.name}`,
+          );
+        }
         flags.add(parameter.flag);
       } else {
         throw new Error(`Parameter ${parameter.name} kind must be positional or option`);
@@ -233,6 +243,39 @@ export function materializeManifest(
     };
   });
 
+  const ask = input.draft.ask;
+  if (ask) {
+    const method = methods.find((candidate) => candidate.name === ask.method);
+    if (!method) {
+      throw new Error(`Question entrypoint cites unknown method: ${ask.method}`);
+    }
+    if (method.risk !== "read") {
+      throw new Error("Question entrypoint method must be read-only");
+    }
+    const parameter = method.parameters.find(
+      (candidate) => candidate.name === ask.parameter,
+    );
+    if (!parameter) {
+      throw new Error(
+        `Question entrypoint cites unknown parameter: ${ask.method}.${ask.parameter}`,
+      );
+    }
+    if (
+      parameter.kind !== "positional" ||
+      (parameter.type !== "string" && parameter.type !== "string[]") ||
+      !parameter.required
+    ) {
+      throw new Error(
+        "Question entrypoint parameter must be a required positional string or string[]",
+      );
+    }
+    if (method.parameters.length !== 1) {
+      throw new Error(
+        "Question entrypoint method must have exactly one parameter",
+      );
+    }
+  }
+
   return {
     schemaVersion: 1,
     name: input.name,
@@ -245,6 +288,7 @@ export function materializeManifest(
       model: "gpt-5.6-luna",
       thinking: "high",
     },
+    ...(ask ? { ask } : {}),
     methods,
   };
 }

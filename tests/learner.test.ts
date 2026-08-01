@@ -72,6 +72,8 @@ test("learns a grounded manifest from bounded CLI help probes", async () => {
     receivedPrompt,
     /For root evidence, argv must not contain the executable name/,
   );
+  assert.match(receivedPrompt, /question entrypoint/i);
+  assert.match(receivedPrompt, /never repeat a parameter.*flag in argv/i);
 });
 
 test("redacts the isolated learning directory from stored evidence", async () => {

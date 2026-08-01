@@ -18,11 +18,11 @@ Agents should not have to rediscover a CLI, remember its provider/model setup, o
 ```text
 installed CLI -> bounded evidence -> compiled manifest -> validated argv -> exact CLI
                                       ^          ^
-                                      |          +-- ask grounded questions
-                                      +-- discover with help/list/describe
+                                      |          +-- delegate scoped questions when declared
+                                      +-- discover and ask over stored evidence
 ```
 
-The model is used only for compilation, natural-language method selection, and grounded answers over stored registry evidence. Probing, validation, storage, drift detection, approval gates, testing, and execution are deterministic.
+The model is used only for compilation, natural-language method selection, and grounded answers over stored registry evidence. A scoped ask can instead delegate to a learned CLI when its manifest explicitly declares a validated read-only question entrypoint. Probing, validation, storage, drift detection, approval gates, testing, and execution are deterministic.
 
 ## Install locally
 
@@ -67,17 +67,18 @@ cmdmint describe <primitive>.<method> --json
 
 Root help includes a live summary of every learned primitive. `help <primitive>` is the readable method guide; its JSON form is a compact agent-facing overview. `describe` remains the exact stored contract, including parameters, types, defaults, risk, output kind, evidence provenance, and the non-mutating verification probe.
 
-### Ask what cmdmint learned
+### Ask for evidence or delegate a question
 
 ```bash
 cmdmint ask "Which learned CLI can manage agent sessions?"
 cmdmint ask cmdmint "Where do you keep your data?" --json
 cmdmint ask herdr "Which operations change state?" --json
+cmdmint ask agentconvos "Where did we decide how scraper fallbacks work?"
 ```
 
 The first form searches all learned primitives plus cmdmint's active runtime metadata. In an unscoped question, words such as “you” and “your” refer to cmdmint itself. Use the explicit `cmdmint` scope for self-only questions, or supply a learned primitive name to scope the question to that CLI. Pi receives only the active registry metadata, stored manifests, and captured help evidence, with tools and ambient context disabled. Every sufficient answer must return source IDs that `cmdmint` validates against the supplied source packet; unsupported questions return an explicit `insufficientEvidence` result.
 
-`ask` explains learned capabilities but never invokes a learned binary. Use `describe` plus `call` when an agent is ready to execute an exact method.
+When a scoped primitive declares an `ask` binding, cmdmint instead invokes that exact read-only method with the question as its sole required argument. The binding is accepted only when deterministic validation confirms the method, risk, and parameter shape. Interactive runs inherit the terminal so the underlying CLI can show live progress; `--json` captures the result without terminal redraws. `--show-prompt` prints a dry-run invocation with `prompt: null`, because cmdmint sends no model prompt on this delegated path. `--trace-prompts` is rejected for delegated asks rather than silently producing an empty trace.
 
 ### Call a method
 
@@ -108,7 +109,7 @@ cmdmint use gh "list the ten newest repositories" --show-prompt
 cmdmint ask gh "How do I list repositories?" --show-prompt
 ```
 
-Add `--json` when a machine-readable object with a `prompt` field is easier to inspect. Previewing `use` or `ask` has no execution side effects. Previewing `learn` still runs the bounded version and help probes needed to construct the evidence packet, but it does not contact Pi, validate a model response, or save a primitive.
+Add `--json` when a machine-readable object with a `prompt` field is easier to inspect. Previewing `use` or `ask` has no execution side effects. A delegated scoped ask reports `prompt: null` and its exact dry-run argv. Previewing `learn` still runs the bounded version and help probes needed to construct the evidence packet, but it does not contact Pi, validate a model response, or save a primitive.
 
 Record the prompts that are actually sent and the captured Pi responses from a normal operation:
 

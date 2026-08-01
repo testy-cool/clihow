@@ -11,6 +11,7 @@ export type MethodArguments = Record<string, unknown>;
 
 export interface ExecuteMethodOptions {
   dryRun?: boolean;
+  stdio?: "capture" | "inherit";
   timeoutMs?: number;
   yes?: boolean;
 }
@@ -157,6 +158,7 @@ export async function executeMethod(
 
   const result = await runProcess(manifest.binary.path, argv, {
     maxOutputBytes: 1024 * 1024,
+    ...(options.stdio ? { stdio: options.stdio } : {}),
     timeoutMs: options.timeoutMs ?? 60_000,
   });
   return {

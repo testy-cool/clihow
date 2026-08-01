@@ -160,6 +160,151 @@ test("rejects a model-invented option parameter", async () => {
   );
 });
 
+test("rejects an option flag duplicated between fixed argv and a parameter", async () => {
+  const { materializeManifest } = await import("../src/manifest.ts");
+
+  assert.throws(
+    () =>
+      materializeManifest({
+        name: "demo",
+        binary,
+        evidence,
+        learnedAt: "2026-07-31T12:00:00.000Z",
+        draft: {
+          description: "A harmless demonstration CLI.",
+          methods: [
+            {
+              name: "greet",
+              description: "Greet one person.",
+              risk: "read",
+              argv: ["greet", "--loud"],
+              parameters: [
+                {
+                  name: "loud",
+                  kind: "option",
+                  type: "boolean",
+                  flag: "--loud",
+                  required: false,
+                  description: "Uppercase the greeting.",
+                },
+              ],
+              output: "text",
+              evidenceId: "sub:greet",
+            },
+          ],
+        },
+      }),
+    /Option flag --loud.*both fixed argv and parameter/i,
+  );
+});
+
+test("materializes a validated read-only question entrypoint", async () => {
+  const { materializeManifest } = await import("../src/manifest.ts");
+  const manifest = materializeManifest({
+    name: "demo",
+    binary,
+    evidence,
+    learnedAt: "2026-07-31T12:00:00.000Z",
+    draft: {
+      description: "A harmless demonstration CLI.",
+      ask: { method: "greet", parameter: "name" },
+      methods: [
+        {
+          name: "greet",
+          description: "Answer a question with a greeting.",
+          risk: "read",
+          argv: ["greet"],
+          parameters: [
+            {
+              name: "name",
+              kind: "positional",
+              type: "string",
+              position: 0,
+              required: true,
+              description: "Question to answer.",
+            },
+          ],
+          output: "text",
+          evidenceId: "sub:greet",
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(manifest.ask, { method: "greet", parameter: "name" });
+});
+
+test("rejects an unsafe or ambiguous question entrypoint", async () => {
+  const { materializeManifest } = await import("../src/manifest.ts");
+  const draft = {
+    description: "A demonstration CLI.",
+    ask: { method: "greet", parameter: "name" },
+    methods: [
+      {
+        name: "greet",
+        description: "Answer a question with a greeting.",
+        risk: "write",
+        argv: ["greet"],
+        parameters: [
+          {
+            name: "name",
+            kind: "positional",
+            type: "string",
+            position: 0,
+            required: true,
+            description: "Question to answer.",
+          },
+        ],
+        output: "text",
+        evidenceId: "sub:greet",
+      },
+    ],
+  };
+
+  assert.throws(
+    () =>
+      materializeManifest({
+        name: "demo",
+        binary,
+        evidence,
+        learnedAt: "2026-07-31T12:00:00.000Z",
+        draft,
+      }),
+    /question entrypoint.*read-only/i,
+  );
+
+  assert.throws(
+    () =>
+      materializeManifest({
+        name: "demo",
+        binary,
+        evidence,
+        learnedAt: "2026-07-31T12:00:00.000Z",
+        draft: {
+          ...draft,
+          methods: [
+            {
+              ...draft.methods[0],
+              risk: "read",
+              parameters: [
+                ...draft.methods[0].parameters,
+                {
+                  name: "loud",
+                  kind: "option",
+                  type: "boolean",
+                  flag: "--loud",
+                  required: false,
+                  description: "Uppercase the answer.",
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    /question entrypoint method must have exactly one parameter/i,
+  );
+});
+
 test("rejects structurally invalid model output", async () => {
   const { materializeManifest } = await import("../src/manifest.ts");
 

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -64,6 +64,183 @@ async function saveDemoPrimitive(root: string): Promise<void> {
   };
   await savePrimitive(root, manifest, evidence);
 }
+
+async function saveQuestionPrimitive(root: string): Promise<void> {
+  const { sha256File } = await import("../src/binary.ts");
+  const { savePrimitive } = await import("../src/registry.ts");
+  const metadata = await stat(fixturePath);
+  const manifest: PrimitiveManifest = {
+    schemaVersion: 1,
+    name: "demo",
+    description: "A deterministic question-answering CLI.",
+    binary: {
+      requested: fixturePath,
+      path: fixturePath,
+      version: "demo-cli 1.0.0",
+      sha256: await sha256File(fixturePath),
+      size: metadata.size,
+      mtimeMs: metadata.mtimeMs,
+    },
+    learnedAt: "2026-08-01T00:00:00.000Z",
+    engine: {
+      kind: "pi",
+      provider: "openai-codex",
+      model: "gpt-5.6-luna",
+      thinking: "high",
+    },
+    ask: { method: "greet", parameter: "name" },
+    methods: [
+      {
+        name: "greet",
+        description: "Answer one question.",
+        risk: "read",
+        argv: ["greet"],
+        parameters: [
+          {
+            name: "name",
+            description: "Question to answer.",
+            kind: "positional",
+            type: "string",
+            position: 0,
+            required: true,
+          },
+        ],
+        output: "text",
+        evidenceId: "sub:greet",
+        probe: { argv: ["greet", "--help"], expectExit: [0] },
+      },
+    ],
+  };
+  const evidence: EvidenceBundle = {
+    schemaVersion: 1,
+    requestedBinary: fixturePath,
+    resolvedPath: fixturePath,
+    probes: [],
+  };
+  await savePrimitive(root, manifest, evidence);
+}
+
+test("scoped ask delegates to a validated question entrypoint without calling Pi", async () => {
+  const { runCli } = await import("../src/cli.ts");
+  const root = await mkdtemp(join(tmpdir(), "cmdmint-question-entrypoint-"));
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  let compileCalls = 0;
+  try {
+    await saveQuestionPrimitive(root);
+    const exitCode = await runCli(
+      ["ask", "demo", "archive question"],
+      {
+        env: { ...process.env, CMDMINT_HOME: root },
+        stdout: (value: string) => stdout.push(value),
+        stderr: (value: string) => stderr.push(value),
+        interactive: false,
+        compileAnswer: async () => {
+          compileCalls += 1;
+          throw new Error("Pi must not answer a delegated question");
+        },
+      },
+    );
+
+    assert.equal(exitCode, 0, stderr.join(""));
+    assert.equal(stdout.join(""), "Hello, archive question!\n");
+    assert.equal(compileCalls, 0);
+    assert.deepEqual(stderr, []);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("scoped ask keeps delegated JSON output machine-clean", async () => {
+  const { runCli } = await import("../src/cli.ts");
+  const root = await mkdtemp(join(tmpdir(), "cmdmint-question-json-"));
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  try {
+    await saveQuestionPrimitive(root);
+    assert.equal(
+      await runCli(["ask", "demo", "archive question", "--json"], {
+        env: { ...process.env, CMDMINT_HOME: root },
+        stdout: (value: string) => stdout.push(value),
+        stderr: (value: string) => stderr.push(value),
+        interactive: true,
+      }),
+      0,
+      stderr.join(""),
+    );
+
+    const result = JSON.parse(stdout.join(""));
+    assert.equal(result.scope, "demo");
+    assert.equal(result.delegated, true);
+    assert.equal(result.answer, "Hello, archive question!");
+    assert.deepEqual(result.invocation.argv, ["greet", "archive question"]);
+    assert.deepEqual(stderr, []);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("scoped ask preview shows the delegated argv without executing or calling Pi", async () => {
+  const { runCli } = await import("../src/cli.ts");
+  const root = await mkdtemp(join(tmpdir(), "cmdmint-question-preview-"));
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  let compileCalls = 0;
+  try {
+    await saveQuestionPrimitive(root);
+    assert.equal(
+      await runCli(
+        ["ask", "demo", "archive question", "--show-prompt", "--json"],
+        {
+          env: { ...process.env, CMDMINT_HOME: root },
+          stdout: (value: string) => stdout.push(value),
+          stderr: (value: string) => stderr.push(value),
+          compileAnswer: async () => {
+            compileCalls += 1;
+            throw new Error("Pi must not run during delegated preview");
+          },
+        },
+      ),
+      0,
+      stderr.join(""),
+    );
+
+    const result = JSON.parse(stdout.join(""));
+    assert.equal(result.delegated, true);
+    assert.equal(result.prompt, null);
+    assert.equal(result.invocation.executed, false);
+    assert.deepEqual(result.invocation.argv, ["greet", "archive question"]);
+    assert.equal(compileCalls, 0);
+    assert.deepEqual(stderr, []);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("scoped delegated ask rejects cmdmint prompt tracing instead of silently ignoring it", async () => {
+  const { runCli } = await import("../src/cli.ts");
+  const root = await mkdtemp(join(tmpdir(), "cmdmint-question-trace-"));
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  try {
+    await saveQuestionPrimitive(root);
+    assert.equal(
+      await runCli(
+        ["ask", "demo", "archive question", "--trace-prompts", join(root, "traces")],
+        {
+          env: { ...process.env, CMDMINT_HOME: root },
+          stdout: (value: string) => stdout.push(value),
+          stderr: (value: string) => stderr.push(value),
+        },
+      ),
+      1,
+    );
+    assert.equal(stdout.join(""), "");
+    assert.match(stderr.join(""), /does not use a cmdmint model prompt/i);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test("learns, registers, discovers, and calls a CLI end to end", async () => {
   const cliModule = await import(

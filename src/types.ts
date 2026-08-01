@@ -50,8 +50,14 @@ export interface PrimitiveMethodDraft {
   evidenceId: string;
 }
 
+export interface QuestionEntrypoint {
+  method: string;
+  parameter: string;
+}
+
 export interface PrimitiveDraft {
   description: string;
+  ask?: QuestionEntrypoint;
   methods: PrimitiveMethodDraft[];
 }
 
@@ -83,5 +89,6 @@ export interface PrimitiveManifest {
     model: "gpt-5.6-luna";
     thinking: "high";
   };
+  ask?: QuestionEntrypoint;
   methods: PrimitiveMethod[];
 }

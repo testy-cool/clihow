@@ -24,6 +24,7 @@ const manifest: PrimitiveManifest = {
     model: "gpt-5.6-luna",
     thinking: "high",
   },
+  ask: { method: "greet", parameter: "name" },
   methods: [
     {
       name: "greet",
@@ -90,7 +91,9 @@ test("root help describes live learned primitives and handles an empty registry"
     await savePrimitive(root, manifest, evidence);
     output.stdout.length = 0;
     assert.equal(await runCli(["--help"], output.io), 0);
-    assert.match(output.stdout.join(""), /Learned primitives:\n\s+demo\s+1 method\b/);
+    const help = output.stdout.join("");
+    assert.match(help, /Learned primitives:\n\s+demo\s+1 method\b/);
+    assert.match(help, /Scoped ask delegates to validated read-only question entrypoints/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -128,6 +131,7 @@ test("primitive help has readable and JSON forms", async () => {
     assert.match(text, /greet\s+\[read, text\]\s+Greet one person\./);
     assert.match(text, /name\s+string\s+required\s+Person to greet\./);
     assert.match(text, /cmdmint call demo\.greet/);
+    assert.match(text, /Question entrypoint:\s+cmdmint ask demo <question>/);
 
     output.stdout.length = 0;
     assert.equal(await runCli(["help", "demo", "--json"], output.io), 0);
@@ -136,6 +140,7 @@ test("primitive help has readable and JSON forms", async () => {
     assert.equal(value.methodCount, 1);
     assert.equal(value.methods[0].name, "greet");
     assert.equal(value.methods[0].parameters[0].name, "name");
+    assert.deepEqual(value.ask, { method: "greet", parameter: "name" });
   } finally {
     await rm(root, { recursive: true, force: true });
   }

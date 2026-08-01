@@ -28,6 +28,7 @@ export interface CliIo {
   env: NodeJS.ProcessEnv;
   stdout: (value: string) => void;
   stderr: (value: string) => void;
+  interactive?: boolean;
   compileAnswer?: (prompt: string) => Promise<string>;
 }
 
@@ -35,6 +36,7 @@ const defaultIo: CliIo = {
   env: process.env,
   stdout: (value) => process.stdout.write(value),
   stderr: (value) => process.stderr.write(value),
+  interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY && process.stderr.isTTY),
 };
 
 interface ParsedArguments {
@@ -182,6 +184,7 @@ Runtime:
   Learning, natural-language selection, and grounded Q&A use Pi with
   openai-codex/gpt-5.6-luna at High thinking. Learned methods execute
   deterministically without a shell. Write and destructive methods require --yes.
+  Scoped ask delegates to validated read-only question entrypoints when present.
 
 Prompt inspection:
   --show-prompt          Print the exact next prompt without calling Pi.
@@ -205,6 +208,7 @@ function primitiveHelpValue(manifest: PrimitiveManifest) {
       version: manifest.binary.version,
     },
     learnedAt: manifest.learnedAt,
+    ...(manifest.ask ? { ask: manifest.ask } : {}),
     methods: manifest.methods.map((method) => ({
       name: method.name,
       description: method.description,
@@ -221,9 +225,14 @@ function primitiveHelp(manifest: PrimitiveManifest): string {
   const lines = [
     `${manifest.name} - ${manifest.description}`,
     `Binary: ${manifest.binary.requested} (${manifest.binary.version})`,
-    "",
-    "Methods:",
   ];
+  if (manifest.ask) {
+    lines.push(
+      `Question entrypoint: cmdmint ask ${manifest.name} <question>`,
+      `  delegates to ${manifest.name}.${manifest.ask.method}`,
+    );
+  }
+  lines.push("", "Methods:");
   for (const method of manifest.methods) {
     lines.push(`  ${method.name}  [${method.risk}, ${method.output}]  ${method.description}`);
     for (const parameter of method.parameters) {
@@ -512,6 +521,78 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
     const question = requestedSelfScope || requestedScope
       ? parsed.positionals.slice(1).join(" ")
       : parsed.positionals.join(" ");
+    if (requestedScope?.ask) {
+      const binding = requestedScope.ask;
+      const method = requestedScope.methods.find(
+        (candidate) => candidate.name === binding.method,
+      );
+      const parameter = method?.parameters.find(
+        (candidate) => candidate.name === binding.parameter,
+      );
+      if (
+        !method ||
+        method.risk !== "read" ||
+        !parameter ||
+        parameter.kind !== "positional" ||
+        (parameter.type !== "string" && parameter.type !== "string[]") ||
+        !parameter.required ||
+        method.parameters.length !== 1
+      ) {
+        throw new Error(
+          `Stored question entrypoint for ${requestedScope.name} is invalid; relearn the primitive`,
+        );
+      }
+      if (optionString(parsed, "--trace-prompts")) {
+        throw new Error(
+          `Scoped ask for ${requestedScope.name} delegates directly and does not use a cmdmint model prompt`,
+        );
+      }
+      const invocation = await executeMethod(
+        requestedScope,
+        binding.method,
+        {
+          [binding.parameter]: parameter.type === "string[]" ? [question] : question,
+        },
+        {
+          dryRun: optionBoolean(parsed, "--show-prompt"),
+          stdio:
+            io.interactive &&
+            !optionBoolean(parsed, "--json") &&
+            !optionBoolean(parsed, "--show-prompt")
+              ? "inherit"
+              : "capture",
+          timeoutMs: 10 * 60_000,
+        },
+      );
+      if (optionBoolean(parsed, "--show-prompt")) {
+        const preview = {
+          command: "ask",
+          scope: requestedScope.name,
+          delegated: true,
+          prompt: null,
+          invocation,
+        };
+        if (optionBoolean(parsed, "--json")) writeJson(io, preview);
+        else {
+          io.stdout("No cmdmint model prompt; this question delegates directly.\n");
+          writeJson(io, preview);
+        }
+        return 0;
+      }
+      if (optionBoolean(parsed, "--json")) {
+        writeJson(io, {
+          scope: requestedScope.name,
+          delegated: true,
+          answer: invocation.stdout.trim(),
+          invocation,
+        });
+      } else if (!io.interactive) {
+        if (invocation.stdout) io.stdout(invocation.stdout);
+        if (invocation.stderr) io.stderr(invocation.stderr);
+      }
+      if (invocation.timedOut) return 124;
+      return invocation.exitCode ?? (invocation.executed ? 1 : 0);
+    }
     const selectedManifests = requestedSelfScope
       ? []
       : requestedScope
