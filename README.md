@@ -71,10 +71,11 @@ Root help includes a live summary of every learned primitive. `help <primitive>`
 
 ```bash
 cmdmint ask "Which learned CLI can manage agent sessions?"
+cmdmint ask cmdmint "Where do you keep your data?" --json
 cmdmint ask herdr "Which operations change state?" --json
 ```
 
-The first form searches all learned primitives. Supplying a primitive name scopes the question to that CLI. Pi receives only the stored manifests and captured help evidence, with tools and ambient context disabled. Every sufficient answer must return source IDs that `cmdmint` validates against the supplied registry packet; unsupported questions return an explicit `insufficientEvidence` result.
+The first form searches all learned primitives plus cmdmint's active runtime metadata. In an unscoped question, words such as “you” and “your” refer to cmdmint itself. Use the explicit `cmdmint` scope for self-only questions, or supply a learned primitive name to scope the question to that CLI. Pi receives only the active registry metadata, stored manifests, and captured help evidence, with tools and ambient context disabled. Every sufficient answer must return source IDs that `cmdmint` validates against the supplied source packet; unsupported questions return an explicit `insufficientEvidence` result.
 
 `ask` explains learned capabilities but never invokes a learned binary. Use `describe` plus `call` when an agent is ready to execute an exact method.
 
@@ -128,6 +129,7 @@ The package includes [`skills/cmdmint/SKILL.md`](skills/cmdmint/SKILL.md). Insta
 `cmdmint` reduces improvisation; it does not make an untrusted executable safe.
 
 - Learning executes the target binary with `--version`, `-V`, `--help`, `-h`, and discovered `<subcommand> --help` probes. Do not learn a binary you would not otherwise execute.
+- Learning uses isolated temporary HOME and XDG directories. Paths derived from that sandbox are stored and queried as `<cmdmint-learning-home>`, never presented as persistent user-data locations.
 - Help output is untrusted prompt data. Pi receives no tools and cannot execute it.
 - Grounded answers are model-generated even though their source IDs are validated. Inspect consequential guidance before turning it into a call.
 - Model output is not trusted. Runtime validation rejects unknown evidence, invented commands/options, malformed types, duplicate names, and unsafe probe shapes.
