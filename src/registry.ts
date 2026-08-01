@@ -49,6 +49,15 @@ export async function loadPrimitive(
   return JSON.parse(contents) as PrimitiveManifest;
 }
 
+export async function loadEvidence(
+  root: string,
+  name: string,
+): Promise<EvidenceBundle> {
+  const path = join(primitiveDirectory(root, name), "evidence.json");
+  const contents = await readFile(path, "utf8");
+  return JSON.parse(contents) as EvidenceBundle;
+}
+
 export async function listPrimitives(root: string): Promise<PrimitiveManifest[]> {
   let entries;
   try {

@@ -2,17 +2,20 @@
 
 import { basename, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { answerQuestion, type RegistryPrimitive } from "./answer.js";
 import { runDoctor } from "./doctor.js";
 import { executeMethod, type MethodArguments } from "./invoke.js";
 import { learnPrimitive } from "./learner.js";
 import { compileWithPi } from "./pi.js";
 import {
   listPrimitives,
+  loadEvidence,
   loadPrimitive,
   registryHome,
   savePrimitive,
 } from "./registry.js";
 import { selectMethod } from "./selector.js";
+import type { PrimitiveManifest } from "./types.js";
 import { testPrimitive } from "./verify.js";
 
 export const VERSION = "0.1.0";
@@ -21,6 +24,7 @@ export interface CliIo {
   env: NodeJS.ProcessEnv;
   stdout: (value: string) => void;
   stderr: (value: string) => void;
+  compileAnswer?: (prompt: string) => Promise<string>;
 }
 
 const defaultIo: CliIo = {
@@ -114,20 +118,37 @@ function parseMethodArguments(value: string | undefined): MethodArguments {
   return parsed as MethodArguments;
 }
 
-function help(): string {
+function rootHelp(primitives?: PrimitiveManifest[]): string {
+  const learned =
+    primitives === undefined
+      ? "  Unavailable."
+      : primitives.length === 0
+        ? "  None yet."
+        : primitives
+            .map(
+              (primitive) =>
+                `  ${primitive.name}\t${String(primitive.methods.length)} ${primitive.methods.length === 1 ? "method" : "methods"}`,
+            )
+            .join("\n");
   return `cmdmint ${VERSION} - mint installed CLIs into tested primitives
 
 Usage:
+  cmdmint help <primitive> [--json]
   cmdmint learn <binary> [--name <name>] [--json]
   cmdmint list [--json]
   cmdmint describe <primitive>[.<method>] [--json]
   cmdmint test <primitive> [--json]
   cmdmint call <primitive>.<method> [--args-json <json>] [--dry-run] [--yes] [--json]
   cmdmint use <primitive> <intent> [--dry-run] [--yes] [--json]
+  cmdmint ask <question> [--json]
+  cmdmint ask <primitive> <question> [--json]
   cmdmint doctor [--json]
 
+Learned primitives:
+${learned}
+
 Runtime:
-  Learning and natural-language selection use Pi with
+  Learning, natural-language selection, and grounded Q&A use Pi with
   openai-codex/gpt-5.6-luna at High thinking. Learned methods execute
   deterministically without a shell. Write and destructive methods require --yes.
 
@@ -137,10 +158,76 @@ Environment:
 `;
 }
 
+function primitiveHelpValue(manifest: PrimitiveManifest) {
+  return {
+    name: manifest.name,
+    description: manifest.description,
+    methodCount: manifest.methods.length,
+    binary: {
+      requested: manifest.binary.requested,
+      path: manifest.binary.path,
+      version: manifest.binary.version,
+    },
+    learnedAt: manifest.learnedAt,
+    methods: manifest.methods.map((method) => ({
+      name: method.name,
+      description: method.description,
+      risk: method.risk,
+      output: method.output,
+      parameters: method.parameters,
+      evidenceId: method.evidenceId,
+      call: `cmdmint call ${manifest.name}.${method.name}`,
+    })),
+  };
+}
+
+function primitiveHelp(manifest: PrimitiveManifest): string {
+  const lines = [
+    `${manifest.name} - ${manifest.description}`,
+    `Binary: ${manifest.binary.requested} (${manifest.binary.version})`,
+    "",
+    "Methods:",
+  ];
+  for (const method of manifest.methods) {
+    lines.push(`  ${method.name}  [${method.risk}, ${method.output}]  ${method.description}`);
+    for (const parameter of method.parameters) {
+      const label =
+        parameter.kind === "option"
+          ? `${parameter.name} (${parameter.flag})`
+          : parameter.name;
+      lines.push(
+        `    ${label}  ${parameter.type}  ${parameter.required ? "required" : "optional"}  ${parameter.description}`,
+      );
+    }
+    lines.push(`    cmdmint call ${manifest.name}.${method.name} --args-json '<json>'`);
+  }
+  if (manifest.methods.length === 0) lines.push("  No methods learned.");
+  return `${lines.join("\n")}\n`;
+}
+
+async function loadRegistryRecords(
+  root: string,
+  manifests: PrimitiveManifest[],
+): Promise<RegistryPrimitive[]> {
+  return await Promise.all(
+    manifests.map(async (manifest) => ({
+      manifest,
+      evidence: await loadEvidence(root, manifest.name),
+    })),
+  );
+}
+
 async function dispatch(args: string[], io: CliIo): Promise<number> {
   const [command, ...rest] = args;
-  if (!command || command === "help" || command === "--help" || command === "-h") {
-    io.stdout(help());
+  const root = registryHome(io.env);
+  if (!command || command === "--help" || command === "-h") {
+    let primitives: PrimitiveManifest[] | undefined;
+    try {
+      primitives = await listPrimitives(root);
+    } catch {
+      // Root help must stay usable even when the registry is unreadable.
+    }
+    io.stdout(rootHelp(primitives));
     return 0;
   }
   if (command === "--version" || command === "version") {
@@ -148,8 +235,30 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
     return 0;
   }
 
-  const root = registryHome(io.env);
   const piBinary = io.env.CMDMINT_PI_BINARY;
+
+  if (command === "help") {
+    const parsed = parseArguments(rest, [], ["--json"]);
+    const name = parsed.positionals[0];
+    if (!name) {
+      if (parsed.positionals.length) throw new Error("Usage: cmdmint help <primitive> [--json]");
+      let primitives: PrimitiveManifest[] | undefined;
+      try {
+        primitives = await listPrimitives(root);
+      } catch {
+        // Root help must stay usable even when the registry is unreadable.
+      }
+      io.stdout(rootHelp(primitives));
+      return 0;
+    }
+    if (parsed.positionals.length !== 1) {
+      throw new Error("Usage: cmdmint help <primitive> [--json]");
+    }
+    const manifest = await loadPrimitive(root, name);
+    if (optionBoolean(parsed, "--json")) writeJson(io, primitiveHelpValue(manifest));
+    else io.stdout(primitiveHelp(manifest));
+    return 0;
+  }
 
   if (command === "learn") {
     const parsed = parseArguments(rest, ["--name", "--max-subcommands"], ["--json"]);
@@ -295,6 +404,43 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
     }
     if (invocation.timedOut) return 124;
     return invocation.exitCode ?? (invocation.executed ? 1 : 0);
+  }
+
+  if (command === "ask") {
+    const parsed = parseArguments(rest, [], ["--json"]);
+    if (parsed.positionals.length === 0) {
+      throw new Error("Usage: cmdmint ask [<primitive>] <question> [--json]");
+    }
+    const manifests = await listPrimitives(root);
+    const requestedScope =
+      parsed.positionals.length > 1
+        ? manifests.find((manifest) => manifest.name === parsed.positionals[0])
+        : undefined;
+    const scope = requestedScope?.name ?? "all";
+    const question = requestedScope
+      ? parsed.positionals.slice(1).join(" ")
+      : parsed.positionals.join(" ");
+    const selectedManifests = requestedScope ? [requestedScope] : manifests;
+    const result = await answerQuestion(
+      question,
+      await loadRegistryRecords(root, selectedManifests),
+      {
+        scope,
+        ...(io.compileAnswer
+          ? { compileAnswer: io.compileAnswer }
+          : piBinary
+          ? { compileAnswer: async (prompt: string) => await compileWithPi(prompt, { piBinary }) }
+          : {}),
+      },
+    );
+    if (optionBoolean(parsed, "--json")) writeJson(io, { scope, ...result });
+    else {
+      io.stdout(`${result.answer}\n`);
+      if (result.sources.length > 0) {
+        io.stdout(`Sources: ${result.sources.map((source) => source.id).join(", ")}\n`);
+      }
+    }
+    return 0;
   }
 
   if (command === "doctor") {
