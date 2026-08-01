@@ -36,9 +36,11 @@ Report a failed doctor check instead of guessing how to repair the underlying CL
 
 Use `ask` to discover or explain what the registry supports. In an unscoped question, `you` and `your` refer to cmdmint; use the explicit `cmdmint` scope when only its own runtime and storage contract should be considered. Treat `insufficientEvidence: true` as a hard limit instead of filling gaps from memory. Prefer `describe` plus `call` when deterministic behavior matters. Use `use` when choosing and binding the method is itself the hard part.
 
+Scoped ask has a deliberate delegation path. When a learned manifest declares an `ask` binding, cmdmint validates that it names exactly one required positional `string` or `string[]` parameter on a `read` method, then invokes that method through the normal binary-fingerprint and shell-free argv path. This means a scoped ask can execute a learned read-only method; it is not a promise that the target binary will never run. Interactive non-JSON runs inherit the target's terminal for native progress or a TUI, while JSON and non-TTY runs capture the invocation result. If no valid binding is present, scoped ask falls back to grounded registry Q&A through Pi.
+
 ## Inspect prompts
 
-Use `--show-prompt --json` to inspect the exact `prompt` cmdmint would send next without contacting Pi. On `learn`, prompt construction still runs the target's bounded version and help probes; it does not save a primitive. On `use` and `ask`, previewing neither invokes Pi nor executes a learned binary.
+Use `--show-prompt --json` to inspect the exact prompt cmdmint would send next without contacting Pi. On `learn`, prompt construction still runs the target's bounded version and help probes; it does not save a primitive. On model-backed `use` and `ask`, previewing renders the prompt without invoking Pi or executing a learned binary. On delegated scoped ask, there is no cmdmint model prompt: the preview returns `delegated: true`, `prompt: null`, and a dry-run invocation containing the validated argv, without executing the learned CLI. Delegated scoped ask does not support `--trace-prompts` because it makes no cmdmint model exchange.
 
 Use `--trace-prompts <directory>` only when the user wants a record of real model exchanges. It preserves each exact prompt and captured Pi response as a user-only JSON file, including separate learning repair attempts. Pi stdout and stderr are each captured up to 1 MiB and can be truncated; the trace's `truncated` field records when either stream exceeded that limit. These files may contain the user's intent and complete CLI help evidence; treat the directory as sensitive. Do not combine tracing with `--show-prompt`.
 
@@ -46,7 +48,7 @@ Use `--trace-prompts <directory>` only when the user wants a record of real mode
 
 Pass arguments only through `--args-json`; never construct or execute a shell command from a manifest. Start state-changing work with `--dry-run`. Add `--yes` only when the requested operation authorizes the reported `write` or `destructive` action.
 
-`ask` never executes a learned binary. Its JSON `sources` are registry references validated against the exact manifests and evidence supplied to Pi; they ground an explanation but do not authorize a later call.
+Model-backed ask does not execute a learned binary. Its JSON `sources` are registry references validated against the exact manifests and evidence supplied to Pi; they ground an explanation but do not authorize a later call. A delegated scoped ask is the exception: it executes only the manifest's validated `read` question entrypoint, with no shell and no `--yes` gate.
 
 Treat `<cmdmint-learning-home>` as an isolated temporary probe environment, never as the real configuration or data location of a learned CLI.
 
