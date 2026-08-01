@@ -2,6 +2,7 @@
 
 import { basename, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { createInterface } from "node:readline/promises";
 import {
   answerQuestion,
   buildAnswerPrompt,
@@ -11,6 +12,7 @@ import { runDoctor } from "./doctor.js";
 import { executeMethod, type MethodArguments } from "./invoke.js";
 import { buildLearningPrompt, learnPrimitive } from "./learner.js";
 import { compileWithPi } from "./pi.js";
+import { browseThreads as browseThreadPicker } from "./thread-browser.js";
 import {
   listPrimitives,
   loadEvidence,
@@ -19,6 +21,15 @@ import {
   savePrimitive,
 } from "./registry.js";
 import { buildSelectionPrompt, selectMethod } from "./selector.js";
+import {
+  buildFollowUpQuestion,
+  createThread,
+  extractReferences,
+  listThreads,
+  loadThread,
+  recordExchange,
+  withThreadLock,
+} from "./threads.js";
 import type { PrimitiveManifest } from "./types.js";
 import { testPrimitive } from "./verify.js";
 
@@ -26,10 +37,13 @@ export const VERSION = "0.1.0";
 
 export interface CliIo {
   env: NodeJS.ProcessEnv;
+  cwd?: string;
   stdout: (value: string) => void;
   stderr: (value: string) => void;
   interactive?: boolean;
   compileAnswer?: (prompt: string) => Promise<string>;
+  readQuestion?: (prompt: string) => Promise<string>;
+  browseThreads?: (argv: string[]) => Promise<number>;
 }
 
 const defaultIo: CliIo = {
@@ -92,6 +106,28 @@ function optionBoolean(parsed: ParsedArguments, name: string): boolean {
 
 function hasOption(parsed: ParsedArguments, name: string): boolean {
   return Object.hasOwn(parsed.options, name);
+}
+
+function positionalBeforeOption(args: string[], option: string): string | undefined {
+  const optionIndex = args.findIndex(
+    (token) => token === option || token.startsWith(`${option}=`),
+  );
+  if (optionIndex === -1) return undefined;
+  return args.slice(0, optionIndex).find((token) => !token.startsWith("--"));
+}
+
+async function readFollowUpQuestion(io: CliIo): Promise<string> {
+  if (io.readQuestion) return (await io.readQuestion("Follow-up> ")).trim();
+  const readline = createInterface({ input: process.stdin, output: process.stderr });
+  try {
+    return (await readline.question("Follow-up> ")).trim();
+  } finally {
+    readline.close();
+  }
+}
+
+function writeThreadHint(io: CliIo, threadId: string): void {
+  io.stderr(`Thread: ${threadId}\nContinue: cmdmint ask --thread ${threadId} "follow-up"\n`);
 }
 
 function writeJson(io: CliIo, value: unknown): void {
@@ -173,8 +209,10 @@ Usage:
   cmdmint test <primitive> [--json]
   cmdmint call <primitive>.<method> [--args-json <json>] [--dry-run] [--yes] [--json]
   cmdmint use <primitive> <intent> [--show-prompt] [--trace-prompts <directory>] [--dry-run] [--yes] [--json]
-  cmdmint ask <question> [--show-prompt] [--trace-prompts <directory>] [--json]
-  cmdmint ask <primitive> <question> [--show-prompt] [--trace-prompts <directory>] [--json]
+  cmdmint ask [--thread <id>] <question> [--show-prompt] [--trace-prompts <directory>] [--json]
+  cmdmint ask [--thread <id>] <primitive> <question> [--show-prompt] [--trace-prompts <directory>] [--json]
+  cmdmint threads [--json]
+  cmdmint threads --find <query...>
   cmdmint doctor [--json]
 
 Learned primitives:
@@ -185,6 +223,7 @@ Runtime:
   openai-codex/gpt-5.6-luna at High thinking. Learned methods execute
   deterministically without a shell. Write and destructive methods require --yes.
   Scoped ask delegates to validated read-only question entrypoints when present.
+  Completed asks are durable threads; continue one explicitly with --thread or browse them with threads.
 
 Prompt inspection:
   --show-prompt          Print the exact next prompt without calling Pi.
@@ -387,6 +426,30 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
     return 0;
   }
 
+  if (command === "threads") {
+    const parsed = parseArguments(rest, ["--find"], ["--json"]);
+    if (optionBoolean(parsed, "--json")) {
+      if (hasOption(parsed, "--find") || parsed.positionals.length) {
+        throw new Error("Usage: cmdmint threads [--json]");
+      }
+      writeJson(io, await listThreads(root));
+      return 0;
+    }
+    const query = [optionString(parsed, "--find"), ...parsed.positionals]
+      .filter((value): value is string => value !== undefined)
+      .join(" ")
+      .trim();
+    if (hasOption(parsed, "--find") && !query) {
+      throw new Error("--find requires a non-empty query");
+    }
+    if (!hasOption(parsed, "--find") && parsed.positionals.length) {
+      throw new Error("Usage: cmdmint threads [--json] or cmdmint threads --find <query...>");
+    }
+    const argv = ["--source", "cmdmint"];
+    if (query) argv.push("--find", query);
+    return await (io.browseThreads ?? browseThreadPicker)(argv);
+  }
+
   if (command === "describe") {
     const parsed = parseArguments(rest, [], ["--json"]);
     const targetValue = parsed.positionals[0];
@@ -501,142 +564,261 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
   if (command === "ask") {
     const parsed = parseArguments(
       rest,
-      ["--trace-prompts"],
+      ["--trace-prompts", "--thread"],
       ["--json", "--show-prompt"],
     );
     assertCompatiblePromptOptions(parsed);
-    if (parsed.positionals.length === 0) {
+    const threadOption = optionString(parsed, "--thread");
+    if (parsed.positionals.length === 0 && !threadOption) {
       throw new Error(
-        "Usage: cmdmint ask [<primitive>] <question> [--show-prompt] [--trace-prompts <directory>] [--json]",
+        "Usage: cmdmint ask [--thread <id>] [<primitive>] <question> [--show-prompt] [--trace-prompts <directory>] [--json]",
       );
     }
-    const manifests = await listPrimitives(root);
-    const requestedSelfScope =
-      parsed.positionals.length > 1 && parsed.positionals[0] === "cmdmint";
-    const requestedScope =
-      parsed.positionals.length > 1 && !requestedSelfScope
-        ? manifests.find((manifest) => manifest.name === parsed.positionals[0])
-        : undefined;
-    const scope = requestedSelfScope ? "cmdmint" : requestedScope?.name ?? "all";
-    const question = requestedSelfScope || requestedScope
-      ? parsed.positionals.slice(1).join(" ")
-      : parsed.positionals.join(" ");
-    if (requestedScope?.ask) {
-      const binding = requestedScope.ask;
-      const method = requestedScope.methods.find(
-        (candidate) => candidate.name === binding.method,
-      );
-      const parameter = method?.parameters.find(
-        (candidate) => candidate.name === binding.parameter,
-      );
-      if (
-        !method ||
-        method.risk !== "read" ||
-        !parameter ||
-        parameter.kind !== "positional" ||
-        (parameter.type !== "string" && parameter.type !== "string[]") ||
-        !parameter.required ||
-        method.parameters.length !== 1
-      ) {
-        throw new Error(
-          `Stored question entrypoint for ${requestedScope.name} is invalid; relearn the primitive`,
-        );
-      }
-      if (optionString(parsed, "--trace-prompts")) {
-        throw new Error(
-          `Scoped ask for ${requestedScope.name} delegates directly and does not use a cmdmint model prompt`,
-        );
-      }
-      const invocation = await executeMethod(
-        requestedScope,
-        binding.method,
-        {
-          [binding.parameter]: parameter.type === "string[]" ? [question] : question,
-        },
-        {
-          dryRun: optionBoolean(parsed, "--show-prompt"),
-          stdio:
-            io.interactive &&
-            !optionBoolean(parsed, "--json") &&
-            !optionBoolean(parsed, "--show-prompt")
-              ? "inherit"
-              : "capture",
-          timeoutMs: 10 * 60_000,
-        },
-      );
-      if (optionBoolean(parsed, "--show-prompt")) {
-        const preview = {
-          command: "ask",
-          scope: requestedScope.name,
-          delegated: true,
-          prompt: null,
-          invocation,
-        };
-        if (optionBoolean(parsed, "--json")) writeJson(io, preview);
-        else {
-          io.stdout("No cmdmint model prompt; this question delegates directly.\n");
-          writeJson(io, preview);
+    const preview = optionBoolean(parsed, "--show-prompt");
+    const preliminaryThread =
+      threadOption && !preview ? await loadThread(root, threadOption) : undefined;
+
+    const runAsk = async (): Promise<number> => {
+      const thread = threadOption ? await loadThread(root, threadOption) : undefined;
+      const manifests = await listPrimitives(root);
+      let scope: string;
+      let question: string;
+      let requestedScope: PrimitiveManifest | undefined;
+
+      if (thread) {
+        const repeatedPrimitive =
+          positionalBeforeOption(rest, "--thread") ??
+          (parsed.positionals[0] === thread.scope ? parsed.positionals[0] : undefined);
+        let questionPositionals = [...parsed.positionals];
+        if (repeatedPrimitive !== undefined) {
+          if (repeatedPrimitive !== thread.scope) {
+            throw new Error(
+              `Repeated primitive ${repeatedPrimitive} does not match thread scope ${thread.scope}`,
+            );
+          }
+          questionPositionals = questionPositionals.slice(1);
         }
+        scope = thread.scope;
+        question = questionPositionals.join(" ");
+        if (scope !== "all" && scope !== "cmdmint") {
+          requestedScope = manifests.find((manifest) => manifest.name === scope);
+          if (!requestedScope) {
+            throw new Error(`Stored thread scope is no longer learned: ${scope}`);
+          }
+        }
+      } else {
+        const requestedSelfScope =
+          parsed.positionals.length > 1 && parsed.positionals[0] === "cmdmint";
+        requestedScope =
+          parsed.positionals.length > 1 && !requestedSelfScope
+            ? manifests.find((manifest) => manifest.name === parsed.positionals[0])
+            : undefined;
+        scope = requestedSelfScope ? "cmdmint" : requestedScope?.name ?? "all";
+        question = requestedSelfScope || requestedScope
+          ? parsed.positionals.slice(1).join(" ")
+          : parsed.positionals.join(" ");
+      }
+
+      if (!question.trim()) {
+        if (!thread || !io.interactive) {
+          throw new Error(
+            "Usage: cmdmint ask [--thread <id>] [<primitive>] <question> [--show-prompt] [--trace-prompts <directory>] [--json]",
+          );
+        }
+        question = await readFollowUpQuestion(io);
+      }
+      if (!question.trim()) throw new Error("Question must not be empty");
+
+      const followUpQuestion = thread
+        ? buildFollowUpQuestion(thread, question)
+        : question;
+      if (requestedScope?.ask) {
+        const binding = requestedScope.ask;
+        const method = requestedScope.methods.find(
+          (candidate) => candidate.name === binding.method,
+        );
+        const parameter = method?.parameters.find(
+          (candidate) => candidate.name === binding.parameter,
+        );
+        if (
+          !method ||
+          method.risk !== "read" ||
+          !parameter ||
+          parameter.kind !== "positional" ||
+          (parameter.type !== "string" && parameter.type !== "string[]") ||
+          !parameter.required ||
+          method.parameters.length !== 1
+        ) {
+          throw new Error(
+            `Stored question entrypoint for ${requestedScope.name} is invalid; relearn the primitive`,
+          );
+        }
+        if (optionString(parsed, "--trace-prompts")) {
+          throw new Error(
+            `Scoped ask for ${requestedScope.name} delegates directly and does not use a cmdmint model prompt`,
+          );
+        }
+        const interactiveDelegate = Boolean(
+          io.interactive && !optionBoolean(parsed, "--json") && !preview,
+        );
+        const invocation = await executeMethod(
+          requestedScope,
+          binding.method,
+          {
+            [binding.parameter]: parameter.type === "string[]" ? [followUpQuestion] : followUpQuestion,
+          },
+          {
+            dryRun: preview,
+            stdio: interactiveDelegate ? "tee" : "capture",
+            env: interactiveDelegate
+              ? { ...io.env, CMDMINT_STREAM_TTY: "1" }
+              : io.env,
+            ...(interactiveDelegate
+              ? { onStdout: io.stdout, onStderr: io.stderr }
+              : {}),
+            timeoutMs: 10 * 60_000,
+          },
+        );
+        if (preview) {
+          const previewValue = {
+            command: "ask",
+            scope: requestedScope.name,
+            delegated: true,
+            prompt: null,
+            invocation,
+          };
+          if (optionBoolean(parsed, "--json")) writeJson(io, previewValue);
+          else {
+            io.stdout("No cmdmint model prompt; this question delegates directly.\n");
+            writeJson(io, previewValue);
+          }
+          return 0;
+        }
+
+        const completed = invocation.executed && invocation.exitCode === 0 && !invocation.timedOut;
+        let threadId: string | undefined;
+        if (completed) {
+          const threadToRecord =
+            thread ??
+            (await createThread(root, {
+              scope,
+              cwd: io.cwd ?? process.cwd(),
+              question,
+            }));
+          const updated = thread
+            ? await recordExchange(root, threadToRecord, {
+                question,
+                answer: invocation.stdout.trim(),
+                sources: extractReferences(invocation.stdout),
+                invocation: {
+                  primitive: requestedScope.name,
+                  method: binding.method,
+                  durationMs: invocation.durationMs,
+                  exitCode: invocation.exitCode,
+                },
+              })
+            : await withThreadLock(root, threadToRecord.id, async () =>
+                await recordExchange(root, threadToRecord, {
+                  question,
+                  answer: invocation.stdout.trim(),
+                  sources: extractReferences(invocation.stdout),
+                  invocation: {
+                    primitive: requestedScope.name,
+                    method: binding.method,
+                    durationMs: invocation.durationMs,
+                    exitCode: invocation.exitCode,
+                  },
+                }),
+              );
+          threadId = updated.id;
+        }
+        if (optionBoolean(parsed, "--json")) {
+          writeJson(io, {
+            scope: requestedScope.name,
+            delegated: true,
+            answer: invocation.stdout.trim(),
+            invocation,
+            ...(threadId ? { threadId } : {}),
+          });
+        } else if (!interactiveDelegate) {
+          if (invocation.stdout) io.stdout(invocation.stdout);
+          if (invocation.stderr) io.stderr(invocation.stderr);
+        }
+        if (threadId && !optionBoolean(parsed, "--json")) writeThreadHint(io, threadId);
+        if (invocation.timedOut) return 124;
+        return invocation.exitCode ?? (invocation.executed ? 1 : 0);
+      }
+
+      const selectedManifests = scope === "cmdmint"
+        ? []
+        : requestedScope
+          ? [requestedScope]
+          : manifests;
+      const records = await loadRegistryRecords(root, selectedManifests);
+      const runtime = { version: VERSION, registryRoot: root };
+      if (preview) {
+        writePromptPreview(
+          io,
+          parsed,
+          buildAnswerPrompt(followUpQuestion, records, scope, runtime),
+          { command: "ask", scope },
+        );
         return 0;
       }
-      if (optionBoolean(parsed, "--json")) {
-        writeJson(io, {
-          scope: requestedScope.name,
-          delegated: true,
-          answer: invocation.stdout.trim(),
-          invocation,
-        });
-      } else if (!io.interactive) {
-        if (invocation.stdout) io.stdout(invocation.stdout);
-        if (invocation.stderr) io.stderr(invocation.stderr);
-      }
-      if (invocation.timedOut) return 124;
-      return invocation.exitCode ?? (invocation.executed ? 1 : 0);
-    }
-    const selectedManifests = requestedSelfScope
-      ? []
-      : requestedScope
-        ? [requestedScope]
-        : manifests;
-    const records = await loadRegistryRecords(root, selectedManifests);
-    const runtime = { version: VERSION, registryRoot: root };
-    if (optionBoolean(parsed, "--show-prompt")) {
-      writePromptPreview(
-        io,
-        parsed,
-        buildAnswerPrompt(question, records, scope, runtime),
-        { command: "ask", scope },
+      const traceDirectory = optionString(parsed, "--trace-prompts");
+      const result = await answerQuestion(
+        followUpQuestion,
+        records,
+        {
+          scope,
+          runtime,
+          ...(io.compileAnswer
+            ? { compileAnswer: io.compileAnswer }
+            : piBinary || traceDirectory
+            ? {
+                compileAnswer: async (prompt: string) =>
+                  await compileWithPi(prompt, {
+                    ...(piBinary ? { piBinary } : {}),
+                    ...(traceDirectory ? { traceDirectory } : {}),
+                  }),
+              }
+            : {}),
+        },
       );
-      return 0;
-    }
-    const traceDirectory = optionString(parsed, "--trace-prompts");
-    const result = await answerQuestion(
-      question,
-      records,
-      {
-        scope,
-        runtime,
-        ...(io.compileAnswer
-          ? { compileAnswer: io.compileAnswer }
-          : piBinary || traceDirectory
-          ? {
-              compileAnswer: async (prompt: string) =>
-                await compileWithPi(prompt, {
-                  ...(piBinary ? { piBinary } : {}),
-                  ...(traceDirectory ? { traceDirectory } : {}),
-                }),
-            }
-          : {}),
-      },
-    );
-    if (optionBoolean(parsed, "--json")) writeJson(io, { scope, ...result });
-    else {
-      io.stdout(`${result.answer}\n`);
-      if (result.sources.length > 0) {
-        io.stdout(`Sources: ${result.sources.map((source) => source.id).join(", ")}\n`);
+      const threadToRecord =
+        thread ??
+        (await createThread(root, {
+          scope,
+          cwd: io.cwd ?? process.cwd(),
+          question,
+        }));
+      const updated = thread
+        ? await recordExchange(root, threadToRecord, {
+            question,
+            answer: result.answer,
+            sources: result.sources.map((source) => source.id),
+          })
+        : await withThreadLock(root, threadToRecord.id, async () =>
+            await recordExchange(root, threadToRecord, {
+              question,
+              answer: result.answer,
+              sources: result.sources.map((source) => source.id),
+            }),
+          );
+      if (optionBoolean(parsed, "--json")) writeJson(io, { scope, ...result, threadId: updated.id });
+      else {
+        io.stdout(`${result.answer}\n`);
+        if (result.sources.length > 0) {
+          io.stdout(`Sources: ${result.sources.map((source) => source.id).join(", ")}\n`);
+        }
+        writeThreadHint(io, updated.id);
       }
-    }
-    return 0;
+      return 0;
+    };
+
+    return preliminaryThread
+      ? await withThreadLock(root, preliminaryThread.id, runAsk)
+      : await runAsk();
   }
 
   if (command === "doctor") {

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -65,19 +65,19 @@ async function saveDemoPrimitive(root: string): Promise<void> {
   await savePrimitive(root, manifest, evidence);
 }
 
-async function saveQuestionPrimitive(root: string): Promise<void> {
+async function saveQuestionPrimitive(root: string, binaryPath = fixturePath): Promise<void> {
   const { sha256File } = await import("../src/binary.ts");
   const { savePrimitive } = await import("../src/registry.ts");
-  const metadata = await stat(fixturePath);
+  const metadata = await stat(binaryPath);
   const manifest: PrimitiveManifest = {
     schemaVersion: 1,
     name: "demo",
     description: "A deterministic question-answering CLI.",
     binary: {
-      requested: fixturePath,
-      path: fixturePath,
+      requested: binaryPath,
+      path: binaryPath,
       version: "demo-cli 1.0.0",
-      sha256: await sha256File(fixturePath),
+      sha256: await sha256File(binaryPath),
       size: metadata.size,
       mtimeMs: metadata.mtimeMs,
     },
@@ -113,8 +113,8 @@ async function saveQuestionPrimitive(root: string): Promise<void> {
   };
   const evidence: EvidenceBundle = {
     schemaVersion: 1,
-    requestedBinary: fixturePath,
-    resolvedPath: fixturePath,
+    requestedBinary: binaryPath,
+    resolvedPath: binaryPath,
     probes: [],
   };
   await savePrimitive(root, manifest, evidence);
@@ -145,7 +145,7 @@ test("scoped ask delegates to a validated question entrypoint without calling Pi
     assert.equal(exitCode, 0, stderr.join(""));
     assert.equal(stdout.join(""), "Hello, archive question!\n");
     assert.equal(compileCalls, 0);
-    assert.deepEqual(stderr, []);
+    assert.match(stderr.join(""), /Thread: [0-9a-f-]{36}\nContinue: cmdmint ask --thread [0-9a-f-]{36}/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -174,7 +174,227 @@ test("scoped ask keeps delegated JSON output machine-clean", async () => {
     assert.equal(result.delegated, true);
     assert.equal(result.answer, "Hello, archive question!");
     assert.deepEqual(result.invocation.argv, ["greet", "archive question"]);
+    assert.match(result.threadId, /^[0-9a-f-]{36}$/);
     assert.deepEqual(stderr, []);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("interactive delegated asks tee the cockpit and persist stdout only", async () => {
+  const { runCli } = await import("../src/cli.ts");
+  const { listThreads } = await import("../src/threads.ts");
+  const root = await mkdtemp(join(tmpdir(), "cmdmint-question-tee-"));
+  const binaryPath = join(root, "interactive-question.mjs");
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  try {
+    await writeFile(
+      binaryPath,
+      "#!/usr/bin/env node\nprocess.stderr.write(`RICH:${process.env.CMDMINT_STREAM_TTY ?? 'missing'}\\n`); process.stdout.write(`FINAL:${process.argv[3]}\\n`);\n",
+      { encoding: "utf8", mode: 0o700 },
+    );
+    await chmod(binaryPath, 0o700);
+    await saveQuestionPrimitive(root, binaryPath);
+
+    assert.equal(
+      await runCli(["ask", "demo", "live question"], {
+        env: { ...process.env, CMDMINT_HOME: root },
+        stdout: (value: string) => stdout.push(value),
+        stderr: (value: string) => stderr.push(value),
+        interactive: true,
+      }),
+      0,
+    );
+    assert.equal(stdout.join(""), "FINAL:live question\n");
+    assert.match(stderr.join(""), /^RICH:1\nThread: [0-9a-f-]{36}/);
+    const thread = (await listThreads(root))[0];
+    assert.equal(thread?.turns[1]?.text, "FINAL:live question");
+    assert.doesNotMatch(JSON.stringify(thread), /RICH:1/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("persists model-backed asks and continues the same UUID with bounded history", async () => {
+  const { runCli } = await import("../src/cli.ts");
+  const { listThreads } = await import("../src/threads.ts");
+  const root = await mkdtemp(join(tmpdir(), "cmdmint-ask-threads-"));
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  const prompts: string[] = [];
+  let answer = "First answer";
+  const io = {
+    env: { ...process.env, CMDMINT_HOME: root },
+    cwd: "/work/demo",
+    stdout: (value: string) => stdout.push(value),
+    stderr: (value: string) => stderr.push(value),
+    compileAnswer: async (prompt: string) => {
+      prompts.push(prompt);
+      return JSON.stringify({
+        answer,
+        sourceIds: ["cmdmint:runtime"],
+        insufficientEvidence: false,
+      });
+    },
+  };
+  try {
+    assert.equal(await runCli(["ask", "cmdmint", "first question", "--json"], io), 0);
+    const first = JSON.parse(stdout.join(""));
+    assert.match(first.threadId, /^[0-9a-f-]{36}$/);
+    assert.equal(first.scope, "cmdmint");
+    assert.deepEqual(stderr, []);
+    assert.equal((await listThreads(root))[0]?.turns.length, 2);
+
+    stdout.length = 0;
+    answer = "Clarified answer";
+    assert.equal(
+      await runCli(["ask", "--thread", first.threadId, "clarify that", "--json"], io),
+      0,
+    );
+    const second = JSON.parse(stdout.join(""));
+    assert.equal(second.threadId, first.threadId);
+    assert.equal((await listThreads(root))[0]?.turns.length, 4);
+    assert.match(prompts[1] ?? "", /navigation context, not authoritative evidence/i);
+    assert.match(prompts[1] ?? "", /Current follow-up:\\nclarify that/);
+
+    stdout.length = 0;
+    stderr.length = 0;
+    answer = "Plain continuation";
+    assert.equal(await runCli(["ask", "--thread", first.threadId, "plain follow-up"], io), 0);
+    assert.equal(stdout.join(""), "Plain continuation\nSources: cmdmint:runtime\n");
+    assert.match(
+      stderr.join(""),
+      new RegExp(`Thread: ${first.threadId}\\nContinue: cmdmint ask --thread ${first.threadId}`),
+    );
+
+    stdout.length = 0;
+    stderr.length = 0;
+    const turnsBeforeMismatch = (await listThreads(root))[0]?.turns.length;
+    assert.equal(await runCli(["ask", "other", "--thread", first.threadId, "clarify"], io), 1);
+    assert.match(stderr.join(""), /does not match|scope/i);
+    assert.equal((await listThreads(root))[0]?.turns.length, turnsBeforeMismatch);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("preview, failed asks, and interactive resumes do not publish premature threads", async () => {
+  const { runCli } = await import("../src/cli.ts");
+  const { listThreads } = await import("../src/threads.ts");
+  const previewRoot = await mkdtemp(join(tmpdir(), "cmdmint-ask-preview-"));
+  const previewStdout: string[] = [];
+  try {
+    assert.equal(
+      await runCli(["ask", "cmdmint", "preview only", "--show-prompt", "--json"], {
+        env: { ...process.env, CMDMINT_HOME: previewRoot },
+        stdout: (value: string) => previewStdout.push(value),
+        stderr: () => undefined,
+      }),
+      0,
+    );
+    assert.equal(JSON.parse(previewStdout.join("")).threadId, undefined);
+    await assert.rejects(readdir(join(previewRoot, "threads")), { code: "ENOENT" });
+  } finally {
+    await rm(previewRoot, { recursive: true, force: true });
+  }
+
+  const root = await mkdtemp(join(tmpdir(), "cmdmint-ask-resume-"));
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  let shouldFail = false;
+  let readQuestionCalls = 0;
+  let answer = "Initial";
+  const io = {
+    env: { ...process.env, CMDMINT_HOME: root },
+    stdout: (value: string) => stdout.push(value),
+    stderr: (value: string) => stderr.push(value),
+    compileAnswer: async () => {
+      if (shouldFail) throw new Error("model failure");
+      return JSON.stringify({
+        answer,
+        sourceIds: ["cmdmint:runtime"],
+        insufficientEvidence: false,
+      });
+    },
+  };
+  try {
+    assert.equal(await runCli(["ask", "cmdmint", "initial", "--json"], io), 0);
+    const threadId = JSON.parse(stdout.join("")).threadId as string;
+    const beforeFailure = await listThreads(root);
+    stdout.length = 0;
+    stderr.length = 0;
+    shouldFail = true;
+    assert.equal(await runCli(["ask", "cmdmint", "--thread", threadId, "will fail"], io), 1);
+    assert.equal((await listThreads(root))[0]?.turns.length, beforeFailure[0]?.turns.length);
+
+    shouldFail = false;
+    answer = "Interactive continuation";
+    stdout.length = 0;
+    stderr.length = 0;
+    assert.equal(
+      await runCli(["ask", "--thread", threadId], {
+        ...io,
+        interactive: true,
+        readQuestion: async (prompt: string) => {
+          readQuestionCalls += 1;
+          assert.match(prompt, /Follow-up/i);
+          return "What changed?";
+        },
+      }),
+      0,
+    );
+    assert.equal(readQuestionCalls, 1);
+    assert.match(stdout.join(""), /Interactive continuation/);
+    assert.equal((await listThreads(root))[0]?.turns.length, 4);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("threads inventory is native while interactive and fuzzy browsing use agentconvos argv", async () => {
+  const { runCli } = await import("../src/cli.ts");
+  const root = await mkdtemp(join(tmpdir(), "cmdmint-thread-browser-"));
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  const observed: string[][] = [];
+  try {
+    const result = await runCli(["threads", "--json"], {
+      env: { ...process.env, CMDMINT_HOME: root },
+      stdout: (value: string) => stdout.push(value),
+      stderr: (value: string) => stderr.push(value),
+    });
+    assert.equal(result, 0);
+    assert.deepEqual(JSON.parse(stdout.join("")), []);
+
+    assert.equal(
+      await runCli(["threads"], {
+        env: { ...process.env, CMDMINT_HOME: root },
+        stdout: (value: string) => stdout.push(value),
+        stderr: (value: string) => stderr.push(value),
+        browseThreads: async (argv: string[]) => {
+          observed.push(argv);
+          return 0;
+        },
+      }),
+      0,
+    );
+    assert.equal(
+      await runCli(["threads", "--find", "MCP", "selector"], {
+        env: { ...process.env, CMDMINT_HOME: root },
+        stdout: (value: string) => stdout.push(value),
+        stderr: (value: string) => stderr.push(value),
+        browseThreads: async (argv: string[]) => {
+          observed.push(argv);
+          return 0;
+        },
+      }),
+      0,
+    );
+    assert.deepEqual(observed, [
+      ["--source", "cmdmint"],
+      ["--source", "cmdmint", "--find", "MCP selector"],
+    ]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

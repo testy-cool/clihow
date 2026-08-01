@@ -94,6 +94,8 @@ test("root help describes live learned primitives and handles an empty registry"
     const help = output.stdout.join("");
     assert.match(help, /Learned primitives:\n\s+demo\s+1 method\b/);
     assert.match(help, /Scoped ask delegates to validated read-only question entrypoints/);
+    assert.match(help, /cmdmint threads(?: --json)?/);
+    assert.match(help, /--thread <id>/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

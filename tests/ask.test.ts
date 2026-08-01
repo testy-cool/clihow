@@ -298,7 +298,7 @@ test("cmdmint ask supports global and primitive scopes without executing learned
     assert.equal(await runCli(["ask", "demo", "How do I greet?"], io), 0);
     assert.match(stdout.join(""), /^Use demo\.greet\.\nSources: demo:evidence:sub:greet\n$/);
     assert.match(prompts.at(-1) ?? "", /"scope":"demo"/);
-    assert.deepEqual(stderr, []);
+    assert.match(stderr.join(""), /Thread: [0-9a-f-]{36}\nContinue: cmdmint ask --thread [0-9a-f-]{36}/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

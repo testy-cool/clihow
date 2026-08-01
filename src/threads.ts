@@ -335,6 +335,11 @@ function renderTurn(turn: AskThreadTurn): string {
   return `${label}:\n${turn.text}${sourceSuffix}`;
 }
 
+export function extractReferences(text: string): string[] {
+  const references = text.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi) ?? [];
+  return [...new Set(references.map((reference) => reference.toLowerCase()))];
+}
+
 export function buildFollowUpQuestion(
   thread: AskThread,
   question: string,
