@@ -357,11 +357,20 @@ export function buildFollowUpQuestion(
   const full = `${prefix}${renderedTurns}${currentLabel}${current}`;
   if (full.length <= limit) return full;
 
-  const preservedCurrent = current.slice(0, Math.max(0, limit - currentLabel.length));
-  const availableContext = Math.max(0, limit - currentLabel.length - preservedCurrent.length);
-  const context = `${prefix}${renderedTurns}`;
-  const truncatedContext = context.slice(-availableContext);
-  return `${truncatedContext}${currentLabel}${preservedCurrent}`.slice(0, limit);
+  const currentSection = `${currentLabel}${current}`;
+  const availableContext = Math.max(0, limit - prefix.length - currentSection.length);
+  const retainedTurns: string[] = [];
+  let retainedLength = 0;
+  for (let index = thread.turns.length - 1; index >= 0; index -= 1) {
+    const renderedTurn = renderTurn(thread.turns[index]!);
+    const separatorLength = retainedTurns.length > 0 ? 2 : 0;
+    const candidateLength = renderedTurn.length + separatorLength;
+    if (retainedLength + candidateLength > availableContext) break;
+    retainedTurns.unshift(renderedTurn);
+    retainedLength += candidateLength;
+  }
+
+  return `${prefix}${retainedTurns.join("\n\n")}${currentSection}`.slice(0, limit);
 }
 
 export async function withThreadLock<T>(

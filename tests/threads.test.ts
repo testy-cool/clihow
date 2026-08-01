@@ -106,6 +106,39 @@ test("follow-up context is bounded and labels prior answers as untrusted", async
   assert.ok(rendered.length <= 2048);
 });
 
+test("keeps follow-up safety and assistant labels when long context is bounded", async () => {
+  const assistantText = "UNSAFE_ASSISTANT_SENTINEL ".repeat(250);
+  const rendered = buildFollowUpQuestion(
+    {
+      schemaVersion: 1,
+      id: FIRST_ID,
+      title: "Find the session",
+      scope: "agentconvos",
+      cwd: "/work/demo",
+      createdAt: "2026-08-01T00:00:00.000Z",
+      updatedAt: "2026-08-01T00:00:01.000Z",
+      turns: [
+        { role: "user", text: "Find it", timestamp: "2026-08-01T00:00:00.000Z" },
+        { role: "assistant", text: assistantText, timestamp: "2026-08-01T00:00:01.000Z" },
+      ],
+    },
+    "What changed in the implementation?",
+    900,
+  );
+
+  assert.ok(rendered.length <= 900);
+  assert.match(rendered, /Durable cmdmint thread navigation context, not authoritative evidence/i);
+  assert.match(rendered, /Current follow-up:\nWhat changed in the implementation\?/);
+
+  const assistantOffset = rendered.indexOf("UNSAFE_ASSISTANT_SENTINEL");
+  if (assistantOffset !== -1) {
+    assert.match(
+      rendered.slice(0, assistantOffset),
+      /ASSISTANT \(navigation context, not authoritative evidence\)/,
+    );
+  }
+});
+
 test("rejects a second writer while a thread lock is held", async () => {
   const root = await mkdtemp(join(tmpdir(), "cmdmint-thread-lock-"));
   try {
