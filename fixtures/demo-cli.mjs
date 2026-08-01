@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { writeFileSync } from "node:fs";
+
 const args = process.argv.slice(2);
 const command = args[0];
 
@@ -57,6 +59,11 @@ if (command in helpByCommand && args.slice(1).some((arg) => arg === "--help" || 
 }
 
 if (command === "greet") {
+  if (process.env.CMDMINT_TEST_EXECUTION_MARKER) {
+    writeFileSync(process.env.CMDMINT_TEST_EXECUTION_MARKER, "greet\n", {
+      mode: 0o600,
+    });
+  }
   const name = args.find((arg, index) => index > 0 && !arg.startsWith("-"));
   if (!name) {
     console.error("name is required");

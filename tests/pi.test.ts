@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,6 +7,9 @@ import test from "node:test";
 
 const recorderPath = fileURLToPath(
   new URL("../fixtures/pi-recorder.mjs", import.meta.url),
+);
+const traceContractPath = fileURLToPath(
+  new URL("../fixtures/pi-trace-contract.mjs", import.meta.url),
 );
 
 test("runs Luna High through Pi without tools or ambient agent context", async () => {
@@ -37,9 +40,12 @@ test("runs Luna High through Pi without tools or ambient agent context", async (
   ]);
 });
 
-test("records the exact prompt and raw response when tracing is explicitly enabled", async () => {
+test("records the exact prompt and captured response with private POSIX modes", {
+  skip: process.platform === "win32",
+}, async () => {
   const { compileWithPi } = await import("../src/pi.ts");
-  const directory = await mkdtemp(join(tmpdir(), "cmdmint-pi-trace-"));
+  const root = await mkdtemp(join(tmpdir(), "cmdmint-pi-trace-"));
+  const directory = join(root, "created-traces");
   try {
     const output = await compileWithPi("trace this exact prompt", {
       piBinary: recorderPath,
@@ -58,7 +64,34 @@ test("records the exact prompt and raw response when tracing is explicitly enabl
     assert.equal(trace.response, output);
     assert.equal(trace.exitCode, 0);
     assert.equal(trace.timedOut, false);
+    assert.equal(trace.truncated, false);
+    assert.equal((await stat(directory)).mode & 0o777, 0o700);
+    assert.equal((await stat(join(directory, files[0]!))).mode & 0o777, 0o600);
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("caps captured Pi stdout and stderr at 1 MiB and traces truncation", async () => {
+  const { compileWithPi } = await import("../src/pi.ts");
+  const root = await mkdtemp(join(tmpdir(), "cmdmint-pi-capture-limit-"));
+  const directory = join(root, "traces");
+  try {
+    const output = await compileWithPi("emit oversized capture", {
+      piBinary: traceContractPath,
+      traceDirectory: directory,
+    });
+
+    assert.equal(Buffer.byteLength(output), 1024 * 1024);
+    const files = await readdir(directory);
+    assert.equal(files.length, 1);
+    const trace = JSON.parse(
+      await readFile(join(directory, files[0]!), "utf8"),
+    );
+    assert.equal(Buffer.byteLength(trace.response), 1024 * 1024);
+    assert.equal(Buffer.byteLength(trace.stderr), 1024 * 1024);
+    assert.equal(trace.truncated, true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });

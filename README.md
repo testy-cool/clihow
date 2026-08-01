@@ -110,7 +110,7 @@ cmdmint ask gh "How do I list repositories?" --show-prompt
 
 Add `--json` when a machine-readable object with a `prompt` field is easier to inspect. Previewing `use` or `ask` has no execution side effects. Previewing `learn` still runs the bounded version and help probes needed to construct the evidence packet, but it does not contact Pi, validate a model response, or save a primitive.
 
-Record the prompts that are actually sent and the raw Pi responses from a normal operation:
+Record the prompts that are actually sent and the captured Pi responses from a normal operation:
 
 ```bash
 cmdmint ask gh "How do I list repositories?" \
@@ -118,7 +118,7 @@ cmdmint ask gh "How do I list repositories?" \
   --json
 ```
 
-Each model exchange becomes a user-only JSON file containing the engine, exact prompt, raw response, stderr, exit status, timing, and truncation state. A learning repair attempt creates another trace file. Trace files can contain user intent and complete learned help evidence, so choose the directory deliberately and treat it as sensitive. `--show-prompt` and `--trace-prompts` cannot be combined.
+Each model exchange becomes a user-only JSON file containing the engine, exact prompt, captured response (Pi stdout), captured stderr, exit status, timing, and truncation state. Stdout and stderr are each captured up to 1 MiB and can be truncated; the trace's `truncated` field records when either stream exceeded that limit. A learning repair attempt creates another trace file. Trace files can contain user intent and complete learned help evidence, so choose the directory deliberately and treat it as sensitive. `--show-prompt` and `--trace-prompts` cannot be combined.
 
 ### Verify and diagnose
 

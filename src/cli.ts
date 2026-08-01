@@ -88,6 +88,10 @@ function optionBoolean(parsed: ParsedArguments, name: string): boolean {
   return parsed.options[name] === true;
 }
 
+function hasOption(parsed: ParsedArguments, name: string): boolean {
+  return Object.hasOwn(parsed.options, name);
+}
+
 function writeJson(io: CliIo, value: unknown): void {
   io.stdout(`${JSON.stringify(value, null, 2)}\n`);
 }
@@ -103,11 +107,15 @@ function writePromptPreview(
 }
 
 function assertCompatiblePromptOptions(parsed: ParsedArguments): void {
-  if (
-    optionBoolean(parsed, "--show-prompt") &&
-    optionString(parsed, "--trace-prompts")
-  ) {
+  const tracePromptsSupplied = hasOption(parsed, "--trace-prompts");
+  if (optionBoolean(parsed, "--show-prompt") && tracePromptsSupplied) {
     throw new Error("--show-prompt cannot be combined with --trace-prompts");
+  }
+  if (
+    tracePromptsSupplied &&
+    !optionString(parsed, "--trace-prompts")?.trim()
+  ) {
+    throw new Error("--trace-prompts requires a non-empty value");
   }
 }
 
@@ -177,7 +185,8 @@ Runtime:
 
 Prompt inspection:
   --show-prompt          Print the exact next prompt without calling Pi.
-  --trace-prompts <dir>  Record exact prompts and raw Pi responses as private JSON files.
+  --trace-prompts <dir>  Record exact prompts and captured Pi responses as private JSON files.
+                         Stdout and stderr can be truncated at 1 MiB; the trace truncated field records it.
 
 Environment:
   CMDMINT_HOME       Registry directory (default: ~/.local/share/cmdmint)
