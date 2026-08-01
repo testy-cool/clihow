@@ -45,7 +45,7 @@ cmdmint doctor
 ### Learn a CLI
 
 ```bash
-cmdmint learn <binary> [--name <name>] [--max-subcommands <count>] [--json]
+cmdmint learn <binary> [--name <name>] [--max-subcommands <count>] [--show-prompt] [--trace-prompts <directory>] [--json]
 ```
 
 Learning performs only version and help probes in a temporary working directory, with a temporary HOME and a small secret-free environment. Pi runs `openai-codex/gpt-5.6-luna` at High thinking with tools, sessions, extensions, skills, prompt templates, and ambient context disabled.
@@ -97,6 +97,28 @@ cmdmint use <primitive> "list the ten newest repositories" --dry-run --json
 ```
 
 Pi selects one learned method and binds its arguments. `cmdmint` then validates that selection against the manifest before planning or executing it. Prefer `call` once an agent already knows the method contract.
+
+### Inspect model prompts
+
+Print the exact next prompt without contacting Pi:
+
+```bash
+cmdmint learn gh --show-prompt
+cmdmint use gh "list the ten newest repositories" --show-prompt
+cmdmint ask gh "How do I list repositories?" --show-prompt
+```
+
+Add `--json` when a machine-readable object with a `prompt` field is easier to inspect. Previewing `use` or `ask` has no execution side effects. Previewing `learn` still runs the bounded version and help probes needed to construct the evidence packet, but it does not contact Pi, validate a model response, or save a primitive.
+
+Record the prompts that are actually sent and the raw Pi responses from a normal operation:
+
+```bash
+cmdmint ask gh "How do I list repositories?" \
+  --trace-prompts ./cmdmint-prompt-traces \
+  --json
+```
+
+Each model exchange becomes a user-only JSON file containing the engine, exact prompt, raw response, stderr, exit status, timing, and truncation state. A learning repair attempt creates another trace file. Trace files can contain user intent and complete learned help evidence, so choose the directory deliberately and treat it as sensitive. `--show-prompt` and `--trace-prompts` cannot be combined.
 
 ### Verify and diagnose
 
