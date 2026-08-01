@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFile, stat } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import type { PrimitiveManifest, PrimitiveMethod } from "../src/types.ts";
@@ -39,16 +41,17 @@ const greetMethod: PrimitiveMethod = {
 
 async function fixtureManifest(
   method: PrimitiveMethod = greetMethod,
+  binaryPath = fixturePath,
 ): Promise<PrimitiveManifest> {
-  const contents = await readFile(fixturePath);
-  const metadata = await stat(fixturePath);
+  const contents = await readFile(binaryPath);
+  const metadata = await stat(binaryPath);
   return {
     schemaVersion: 1,
     name: "demo",
     description: "Demo primitive.",
     binary: {
       requested: "demo-cli",
-      path: fixturePath,
+      path: binaryPath,
       version: "demo-cli 1.0.0",
       sha256: createHash("sha256").update(contents).digest("hex"),
       size: metadata.size,
@@ -164,4 +167,58 @@ test("refuses execution after the learned binary changes", async () => {
     executeMethod(manifest, "greet", { name: "Ada" }),
     /Binary drift detected.*run cmdmint learn again/,
   );
+});
+
+test("forwards invocation environment and tee callbacks without a shell", async () => {
+  const root = await mkdtemp(join(tmpdir(), "cmdmint-invoke-"));
+  const binaryPath = join(root, "echo-env.mjs");
+  try {
+    await writeFile(
+      binaryPath,
+      "#!/usr/bin/env node\nprocess.stdout.write(JSON.stringify({value: process.env.CMDMINT_TEST_VALUE, arg: process.argv[2]})); process.stderr.write('live-warning');\n",
+      { encoding: "utf8", mode: 0o700 },
+    );
+    await chmod(binaryPath, 0o700);
+    const method: PrimitiveMethod = {
+      ...greetMethod,
+      name: "echo",
+      argv: [],
+      parameters: [
+        {
+          name: "value",
+          description: "Value to echo.",
+          kind: "positional",
+          type: "string",
+          position: 0,
+          required: true,
+        },
+      ],
+    };
+    const manifest = await fixtureManifest(method, binaryPath);
+    const liveStdout: string[] = [];
+    const liveStderr: string[] = [];
+
+    const { executeMethod } = await import("../src/invoke.ts");
+    const result = await executeMethod(
+      manifest,
+      "echo",
+      { value: "$(touch /tmp/cmdmint-invoke-must-not-run)" },
+      {
+        stdio: "tee",
+        env: { PATH: process.env.PATH ?? "", CMDMINT_TEST_VALUE: "isolated" },
+        onStdout: (value) => liveStdout.push(value),
+        onStderr: (value) => liveStderr.push(value),
+      },
+    );
+
+    assert.deepEqual(JSON.parse(result.stdout), {
+      value: "isolated",
+      arg: "$(touch /tmp/cmdmint-invoke-must-not-run)",
+    });
+    assert.equal(result.stderr, "live-warning");
+    assert.equal(liveStdout.join(""), result.stdout);
+    assert.equal(liveStderr.join(""), result.stderr);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

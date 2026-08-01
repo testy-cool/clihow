@@ -17,7 +17,9 @@ export interface ProcessOptions {
   cwd?: string;
   env?: NodeJS.ProcessEnv;
   maxOutputBytes?: number;
-  stdio?: "capture" | "inherit";
+  stdio?: "capture" | "inherit" | "tee";
+  onStdout?: (value: string) => void;
+  onStderr?: (value: string) => void;
   timeoutMs?: number;
 }
 
@@ -30,6 +32,7 @@ export async function runProcess(
   const timeoutMs = options.timeoutMs ?? 30_000;
   const maxOutputBytes = options.maxOutputBytes ?? 256 * 1024;
   const inheritStdio = options.stdio === "inherit";
+  const teeStdio = options.stdio === "tee";
 
   return await new Promise<ProcessResult>((resolve, reject) => {
     const child = spawn(command, argv, {
@@ -39,7 +42,9 @@ export async function runProcess(
       shell: false,
       stdio: inheritStdio
         ? ["inherit", "inherit", "inherit"]
-        : ["ignore", "pipe", "pipe"],
+        : teeStdio
+          ? ["inherit", "pipe", "pipe"]
+          : ["ignore", "pipe", "pipe"],
     });
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
@@ -61,6 +66,7 @@ export async function runProcess(
     }, timeoutMs);
 
     child.stdout?.on("data", (chunk: Buffer) => {
+      options.onStdout?.(chunk.toString("utf8"));
       const remaining = Math.max(0, maxOutputBytes - stdoutBytes);
       if (chunk.length > remaining) truncated = true;
       if (remaining > 0) {
@@ -70,6 +76,7 @@ export async function runProcess(
       }
     });
     child.stderr?.on("data", (chunk: Buffer) => {
+      options.onStderr?.(chunk.toString("utf8"));
       const remaining = Math.max(0, maxOutputBytes - stderrBytes);
       if (chunk.length > remaining) truncated = true;
       if (remaining > 0) {

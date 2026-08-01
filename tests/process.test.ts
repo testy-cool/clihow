@@ -79,3 +79,23 @@ test("runs inside the supplied directory and environment", async () => {
     await rm(cwd, { recursive: true, force: true });
   }
 });
+
+test("tee mode forwards and captures both streams", async () => {
+  const { runProcess } = await import("../src/process.ts");
+  const liveStdout: string[] = [];
+  const liveStderr: string[] = [];
+  const result = await runProcess(
+    process.execPath,
+    ["-e", "process.stdout.write('answer'); process.stderr.write('cockpit')"],
+    {
+      stdio: "tee",
+      onStdout: (value) => liveStdout.push(value),
+      onStderr: (value) => liveStderr.push(value),
+    },
+  );
+
+  assert.equal(result.stdout, "answer");
+  assert.equal(result.stderr, "cockpit");
+  assert.equal(liveStdout.join(""), "answer");
+  assert.equal(liveStderr.join(""), "cockpit");
+});
