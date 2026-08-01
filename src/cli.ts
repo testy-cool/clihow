@@ -412,20 +412,27 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
       throw new Error("Usage: cmdmint ask [<primitive>] <question> [--json]");
     }
     const manifests = await listPrimitives(root);
+    const requestedSelfScope =
+      parsed.positionals.length > 1 && parsed.positionals[0] === "cmdmint";
     const requestedScope =
-      parsed.positionals.length > 1
+      parsed.positionals.length > 1 && !requestedSelfScope
         ? manifests.find((manifest) => manifest.name === parsed.positionals[0])
         : undefined;
-    const scope = requestedScope?.name ?? "all";
-    const question = requestedScope
+    const scope = requestedSelfScope ? "cmdmint" : requestedScope?.name ?? "all";
+    const question = requestedSelfScope || requestedScope
       ? parsed.positionals.slice(1).join(" ")
       : parsed.positionals.join(" ");
-    const selectedManifests = requestedScope ? [requestedScope] : manifests;
+    const selectedManifests = requestedSelfScope
+      ? []
+      : requestedScope
+        ? [requestedScope]
+        : manifests;
     const result = await answerQuestion(
       question,
       await loadRegistryRecords(root, selectedManifests),
       {
         scope,
+        runtime: { version: VERSION, registryRoot: root },
         ...(io.compileAnswer
           ? { compileAnswer: io.compileAnswer }
           : piBinary

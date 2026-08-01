@@ -78,13 +78,21 @@ async function runProbe(
   });
 }
 
-function asEvidence(id: string, result: ProcessResult): ProbeEvidence {
+function redactLearningDirectory(value: string, directory: string): string {
+  return value.replaceAll(directory, "<cmdmint-learning-home>");
+}
+
+function asEvidence(
+  id: string,
+  result: ProcessResult,
+  directory: string,
+): ProbeEvidence {
   return {
     id,
     argv: [...result.argv],
     exitCode: result.exitCode,
-    stdout: result.stdout,
-    stderr: result.stderr,
+    stdout: redactLearningDirectory(result.stdout, directory),
+    stderr: redactLearningDirectory(result.stderr, directory),
     timedOut: result.timedOut,
     truncated: result.truncated,
   };
@@ -157,12 +165,12 @@ async function collectEvidence(
     throw new Error(`Could not collect help output from ${requested}`);
   }
 
-  const probes = [asEvidence("root", rootResult)];
+  const probes = [asEvidence("root", rootResult, directory)];
   const rootHelp = `${rootResult.stdout}\n${rootResult.stderr}`;
   for (const command of parseSubcommands(rootHelp, maxSubcommands)) {
     const result = await runProbe(path, [command, "--help"], directory);
     if (!result.timedOut && `${result.stdout}${result.stderr}`.trim()) {
-      probes.push(asEvidence(`sub:${command}`, result));
+      probes.push(asEvidence(`sub:${command}`, result, directory));
     }
   }
   return {

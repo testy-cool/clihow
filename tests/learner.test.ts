@@ -5,6 +5,9 @@ import test from "node:test";
 const fixturePath = fileURLToPath(
   new URL("../fixtures/demo-cli.mjs", import.meta.url),
 );
+const environmentFixturePath = fileURLToPath(
+  new URL("../fixtures/environment-help-cli.mjs", import.meta.url),
+);
 const piDraftPath = fileURLToPath(
   new URL("../fixtures/pi-draft.mjs", import.meta.url),
 );
@@ -69,6 +72,37 @@ test("learns a grounded manifest from bounded CLI help probes", async () => {
     receivedPrompt,
     /For root evidence, argv must not contain the executable name/,
   );
+});
+
+test("redacts the isolated learning directory from stored evidence", async () => {
+  const { learnPrimitive } = await import("../src/learner.ts");
+
+  const result = await learnPrimitive({
+    binary: environmentFixturePath,
+    name: "environment-help",
+    compileDraft: async () =>
+      JSON.stringify({
+        description: "Show environment-derived configuration help.",
+        methods: [
+          {
+            name: "root",
+            description: "Show the root operation.",
+            risk: "read",
+            argv: [],
+            parameters: [],
+            output: "text",
+            evidenceId: "root",
+          },
+        ],
+      }),
+  });
+
+  const stdout = result.evidence.probes[0]?.stdout ?? "";
+  assert.match(
+    stdout,
+    /<cmdmint-learning-home>\/config\/environment-help-cli\/config\.toml/,
+  );
+  assert.doesNotMatch(stdout, /cmdmint-learn-/);
 });
 
 test("uses the locked Pi runtime when no compiler is injected", async () => {

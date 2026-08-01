@@ -55,6 +55,17 @@ const evidence: EvidenceBundle = {
   ],
 };
 
+const contaminatedEvidence: EvidenceBundle = {
+  ...evidence,
+  probes: [
+    {
+      ...evidence.probes[0]!,
+      stdout:
+        "Config file: /tmp/cmdmint-learn-r9Hotu/config/demo/config.toml\n",
+    },
+  ],
+};
+
 test("grounds answers in validated manifest and evidence source references", async () => {
   const answerModule = await import(
     new URL("../src/answer.ts", import.meta.url).href
@@ -122,6 +133,129 @@ test("reports insufficient evidence explicitly without invoking Pi for an empty 
   assert.equal(result.insufficientEvidence, true);
   assert.match(result.answer, /^Insufficient evidence:/);
   assert.deepEqual(result.sources, []);
+});
+
+test("grounds self questions in cmdmint runtime metadata", async () => {
+  const { answerQuestion } = await import("../src/answer.ts");
+  let prompt = "";
+
+  const result = await answerQuestion(
+    "where do you keep your data?",
+    [{ manifest, evidence }],
+    {
+      scope: "all",
+      runtime: {
+        version: "0.1.0",
+        registryRoot: "/home/test/.local/share/cmdmint",
+      },
+      compileAnswer: async (value) => {
+        prompt = value;
+        return JSON.stringify({
+          answer: "cmdmint stores learned data in its registry.",
+          sourceIds: ["cmdmint:runtime"],
+          insufficientEvidence: false,
+        });
+      },
+    },
+  );
+
+  assert.equal(result.sources[0]?.id, "cmdmint:runtime");
+  assert.equal(result.sources[0]?.kind, "runtime");
+  assert.match(prompt, /\/home\/test\/\.local\/share\/cmdmint/);
+  assert.match(prompt, /first-person words such as "you" and "your" refer to cmdmint/i);
+});
+
+test("redacts legacy learning sandbox paths before Q&A", async () => {
+  const { answerQuestion } = await import("../src/answer.ts");
+  let prompt = "";
+
+  await answerQuestion(
+    "Where is the configuration?",
+    [{ manifest, evidence: contaminatedEvidence }],
+    {
+      compileAnswer: async (value) => {
+        prompt = value;
+        return JSON.stringify({
+          answer: "The captured path is from an ephemeral learning environment.",
+          sourceIds: ["demo:evidence:sub:greet"],
+          insufficientEvidence: true,
+        });
+      },
+    },
+  );
+
+  assert.doesNotMatch(prompt, /\/tmp\/cmdmint-learn-r9Hotu/);
+  assert.match(prompt, /<cmdmint-learning-home>\/config\/demo\/config\.toml/);
+});
+
+test("cmdmint ask answers global self questions from the active registry", async () => {
+  const { runCli } = await import("../src/cli.ts");
+  const root = await mkdtemp(join(tmpdir(), "cmdmint-self-"));
+  try {
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const io = {
+      env: { ...process.env, CMDMINT_HOME: root },
+      stdout: (value: string) => stdout.push(value),
+      stderr: (value: string) => stderr.push(value),
+      compileAnswer: async () =>
+        JSON.stringify({
+          answer: `cmdmint stores its registry at ${root}.`,
+          sourceIds: ["cmdmint:runtime"],
+          insufficientEvidence: false,
+        }),
+    };
+
+    assert.equal(
+      await runCli(["ask", "where do you keep your data", "--json"], io),
+      0,
+      stderr.join(""),
+    );
+    const value = JSON.parse(stdout.join(""));
+    assert.equal(value.scope, "all");
+    assert.deepEqual(
+      value.sources.map((source: { id: string; kind: string }) => [
+        source.id,
+        source.kind,
+      ]),
+      [["cmdmint:runtime", "runtime"]],
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("cmdmint ask supports an explicit cmdmint self scope", async () => {
+  const { runCli } = await import("../src/cli.ts");
+  const root = await mkdtemp(join(tmpdir(), "cmdmint-self-"));
+  try {
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    let prompt = "";
+    const io = {
+      env: { ...process.env, CMDMINT_HOME: root },
+      stdout: (value: string) => stdout.push(value),
+      stderr: (value: string) => stderr.push(value),
+      compileAnswer: async (value: string) => {
+        prompt = value;
+        return JSON.stringify({
+          answer: `cmdmint stores its registry at ${root}.`,
+          sourceIds: ["cmdmint:runtime"],
+          insufficientEvidence: false,
+        });
+      },
+    };
+
+    assert.equal(
+      await runCli(["ask", "cmdmint", "where is your registry?", "--json"], io),
+      0,
+      stderr.join(""),
+    );
+    assert.equal(JSON.parse(stdout.join("")).scope, "cmdmint");
+    assert.doesNotMatch(prompt, /demo:manifest/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("cmdmint ask supports global and primitive scopes without executing learned binaries", async () => {
