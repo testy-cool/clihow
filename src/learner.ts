@@ -16,13 +16,17 @@ import type {
 
 type DraftCompiler = (prompt: string) => Promise<string>;
 
-export interface LearnPrimitiveOptions {
+export interface LearningPromptOptions {
   binary: string;
   name: string;
+  maxSubcommands?: number;
+}
+
+export interface LearnPrimitiveOptions extends LearningPromptOptions {
   compileDraft?: DraftCompiler;
   now?: () => Date;
-  maxSubcommands?: number;
   piBinary?: string;
+  traceDirectory?: string;
 }
 
 export interface LearnPrimitiveResult {
@@ -181,6 +185,23 @@ async function collectEvidence(
   };
 }
 
+async function collectLearningInputs(
+  options: LearningPromptOptions,
+  directory: string,
+): Promise<{ binary: BinaryIdentity; evidence: EvidenceBundle }> {
+  const path = await resolveExecutable(options.binary);
+  const [binary, evidence] = await Promise.all([
+    identifyBinary(options.binary, path, directory),
+    collectEvidence(
+      options.binary,
+      path,
+      directory,
+      options.maxSubcommands ?? 16,
+    ),
+  ]);
+  return { binary, evidence };
+}
+
 function compilerPrompt(name: string, evidence: EvidenceBundle): string {
   return `You compile CLI help into a small, stable primitive manifest.
 
@@ -235,27 +256,35 @@ function parseDraft(output: string): PrimitiveDraft {
   return JSON.parse(candidate.slice(firstBrace, lastBrace + 1)) as PrimitiveDraft;
 }
 
+export async function buildLearningPrompt(
+  options: LearningPromptOptions,
+): Promise<string> {
+  const directory = await mkdtemp(join(tmpdir(), "cmdmint-learn-"));
+  try {
+    const { evidence } = await collectLearningInputs(options, directory);
+    return compilerPrompt(options.name, evidence);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
 export async function learnPrimitive(
   options: LearnPrimitiveOptions,
 ): Promise<LearnPrimitiveResult> {
   const directory = await mkdtemp(join(tmpdir(), "cmdmint-learn-"));
   try {
-    const path = await resolveExecutable(options.binary);
-    const [binary, evidence] = await Promise.all([
-      identifyBinary(options.binary, path, directory),
-      collectEvidence(
-        options.binary,
-        path,
-        directory,
-        options.maxSubcommands ?? 16,
-      ),
-    ]);
+    const { binary, evidence } = await collectLearningInputs(options, directory);
     const compileDraft =
       options.compileDraft ??
       (async (prompt: string) =>
         await compileWithPi(
           prompt,
-          options.piBinary ? { piBinary: options.piBinary } : {},
+          {
+            ...(options.piBinary ? { piBinary: options.piBinary } : {}),
+            ...(options.traceDirectory
+              ? { traceDirectory: options.traceDirectory }
+              : {}),
+          },
         ));
     const basePrompt = compilerPrompt(options.name, evidence);
     const learnedAt = (options.now ?? (() => new Date()))().toISOString();

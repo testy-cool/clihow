@@ -92,7 +92,7 @@ function availableSources(
   return sources;
 }
 
-function answerPrompt(
+export function buildAnswerPrompt(
   question: string,
   records: RegistryPrimitive[],
   scope: string,
@@ -215,7 +215,7 @@ export async function answerQuestion(
   const compileAnswer = options.compileAnswer ?? compileWithPi;
   return parseAnswer(
     await compileAnswer(
-      answerPrompt(
+      buildAnswerPrompt(
         question,
         records,
         options.scope ?? "all",

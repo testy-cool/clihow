@@ -44,7 +44,10 @@ function parseSelection(output: string): MethodSelection {
   };
 }
 
-function selectionPrompt(manifest: PrimitiveManifest, intent: string): string {
+export function buildSelectionPrompt(
+  manifest: PrimitiveManifest,
+  intent: string,
+): string {
   const methods = manifest.methods.map((method) => ({
     name: method.name,
     description: method.description,
@@ -71,7 +74,7 @@ export async function selectMethod(
   if (!intent.trim()) throw new Error("Intent must not be empty");
   const compileSelection = options.compileSelection ?? compileWithPi;
   const selection = parseSelection(
-    await compileSelection(selectionPrompt(manifest, intent)),
+    await compileSelection(buildSelectionPrompt(manifest, intent)),
   );
   const method = manifest.methods.find(
     (candidate) => candidate.name === selection.method,

@@ -2,10 +2,14 @@
 
 import { basename, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { answerQuestion, type RegistryPrimitive } from "./answer.js";
+import {
+  answerQuestion,
+  buildAnswerPrompt,
+  type RegistryPrimitive,
+} from "./answer.js";
 import { runDoctor } from "./doctor.js";
 import { executeMethod, type MethodArguments } from "./invoke.js";
-import { learnPrimitive } from "./learner.js";
+import { buildLearningPrompt, learnPrimitive } from "./learner.js";
 import { compileWithPi } from "./pi.js";
 import {
   listPrimitives,
@@ -14,7 +18,7 @@ import {
   registryHome,
   savePrimitive,
 } from "./registry.js";
-import { selectMethod } from "./selector.js";
+import { buildSelectionPrompt, selectMethod } from "./selector.js";
 import type { PrimitiveManifest } from "./types.js";
 import { testPrimitive } from "./verify.js";
 
@@ -88,6 +92,25 @@ function writeJson(io: CliIo, value: unknown): void {
   io.stdout(`${JSON.stringify(value, null, 2)}\n`);
 }
 
+function writePromptPreview(
+  io: CliIo,
+  parsed: ParsedArguments,
+  prompt: string,
+  context: Record<string, unknown>,
+): void {
+  if (optionBoolean(parsed, "--json")) writeJson(io, { ...context, prompt });
+  else io.stdout(`${prompt}\n`);
+}
+
+function assertCompatiblePromptOptions(parsed: ParsedArguments): void {
+  if (
+    optionBoolean(parsed, "--show-prompt") &&
+    optionString(parsed, "--trace-prompts")
+  ) {
+    throw new Error("--show-prompt cannot be combined with --trace-prompts");
+  }
+}
+
 function deriveName(binary: string): string {
   const name = basename(binary)
     .replace(/\.[^.]+$/, "")
@@ -134,14 +157,14 @@ function rootHelp(primitives?: PrimitiveManifest[]): string {
 
 Usage:
   cmdmint help <primitive> [--json]
-  cmdmint learn <binary> [--name <name>] [--json]
+  cmdmint learn <binary> [--name <name>] [--show-prompt] [--trace-prompts <directory>] [--json]
   cmdmint list [--json]
   cmdmint describe <primitive>[.<method>] [--json]
   cmdmint test <primitive> [--json]
   cmdmint call <primitive>.<method> [--args-json <json>] [--dry-run] [--yes] [--json]
-  cmdmint use <primitive> <intent> [--dry-run] [--yes] [--json]
-  cmdmint ask <question> [--json]
-  cmdmint ask <primitive> <question> [--json]
+  cmdmint use <primitive> <intent> [--show-prompt] [--trace-prompts <directory>] [--dry-run] [--yes] [--json]
+  cmdmint ask <question> [--show-prompt] [--trace-prompts <directory>] [--json]
+  cmdmint ask <primitive> <question> [--show-prompt] [--trace-prompts <directory>] [--json]
   cmdmint doctor [--json]
 
 Learned primitives:
@@ -151,6 +174,10 @@ Runtime:
   Learning, natural-language selection, and grounded Q&A use Pi with
   openai-codex/gpt-5.6-luna at High thinking. Learned methods execute
   deterministically without a shell. Write and destructive methods require --yes.
+
+Prompt inspection:
+  --show-prompt          Print the exact next prompt without calling Pi.
+  --trace-prompts <dir>  Record exact prompts and raw Pi responses as private JSON files.
 
 Environment:
   CMDMINT_HOME       Registry directory (default: ~/.local/share/cmdmint)
@@ -261,10 +288,17 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
   }
 
   if (command === "learn") {
-    const parsed = parseArguments(rest, ["--name", "--max-subcommands"], ["--json"]);
+    const parsed = parseArguments(
+      rest,
+      ["--name", "--max-subcommands", "--trace-prompts"],
+      ["--json", "--show-prompt"],
+    );
+    assertCompatiblePromptOptions(parsed);
     const binary = parsed.positionals[0];
     if (!binary || parsed.positionals.length !== 1) {
-      throw new Error("Usage: cmdmint learn <binary> [--name <name>] [--json]");
+      throw new Error(
+        "Usage: cmdmint learn <binary> [--name <name>] [--show-prompt] [--trace-prompts <directory>] [--json]",
+      );
     }
     const maxSubcommandsValue = optionString(parsed, "--max-subcommands");
     const maxSubcommands = maxSubcommandsValue
@@ -273,11 +307,30 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
     if (maxSubcommands !== undefined && (!Number.isInteger(maxSubcommands) || maxSubcommands < 1)) {
       throw new Error("--max-subcommands must be a positive integer");
     }
-    const learnOptions = {
+    const learningPromptOptions = {
       binary,
       name: optionString(parsed, "--name") ?? deriveName(binary),
       ...(maxSubcommands === undefined ? {} : { maxSubcommands }),
+    };
+    if (optionBoolean(parsed, "--show-prompt")) {
+      writePromptPreview(
+        io,
+        parsed,
+        await buildLearningPrompt(learningPromptOptions),
+        {
+          command: "learn",
+          primitive: learningPromptOptions.name,
+          binary,
+        },
+      );
+      return 0;
+    }
+    const learnOptions = {
+      ...learningPromptOptions,
       ...(piBinary ? { piBinary } : {}),
+      ...(optionString(parsed, "--trace-prompts")
+        ? { traceDirectory: optionString(parsed, "--trace-prompts")! }
+        : {}),
     };
     const result = await learnPrimitive(learnOptions);
     const verification = await testPrimitive(result.manifest);
@@ -375,16 +428,37 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
   }
 
   if (command === "use") {
-    const parsed = parseArguments(rest, [], ["--dry-run", "--yes", "--json"]);
+    const parsed = parseArguments(
+      rest,
+      ["--trace-prompts"],
+      ["--dry-run", "--yes", "--json", "--show-prompt"],
+    );
+    assertCompatiblePromptOptions(parsed);
     const name = parsed.positionals[0];
     const intent = parsed.positionals.slice(1).join(" ");
     if (!name || !intent) {
-      throw new Error("Usage: cmdmint use <primitive> <intent> [--dry-run] [--yes]");
+      throw new Error(
+        "Usage: cmdmint use <primitive> <intent> [--show-prompt] [--trace-prompts <directory>] [--dry-run] [--yes] [--json]",
+      );
     }
     const manifest = await loadPrimitive(root, name);
+    if (optionBoolean(parsed, "--show-prompt")) {
+      writePromptPreview(io, parsed, buildSelectionPrompt(manifest, intent), {
+        command: "use",
+        primitive: name,
+      });
+      return 0;
+    }
+    const traceDirectory = optionString(parsed, "--trace-prompts");
     const selection = await selectMethod(manifest, intent, {
-      ...(piBinary
-        ? { compileSelection: async (prompt: string) => await compileWithPi(prompt, { piBinary }) }
+      ...(piBinary || traceDirectory
+        ? {
+            compileSelection: async (prompt: string) =>
+              await compileWithPi(prompt, {
+                ...(piBinary ? { piBinary } : {}),
+                ...(traceDirectory ? { traceDirectory } : {}),
+              }),
+          }
         : {}),
     });
     const invocation = await executeMethod(
@@ -407,9 +481,16 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
   }
 
   if (command === "ask") {
-    const parsed = parseArguments(rest, [], ["--json"]);
+    const parsed = parseArguments(
+      rest,
+      ["--trace-prompts"],
+      ["--json", "--show-prompt"],
+    );
+    assertCompatiblePromptOptions(parsed);
     if (parsed.positionals.length === 0) {
-      throw new Error("Usage: cmdmint ask [<primitive>] <question> [--json]");
+      throw new Error(
+        "Usage: cmdmint ask [<primitive>] <question> [--show-prompt] [--trace-prompts <directory>] [--json]",
+      );
     }
     const manifests = await listPrimitives(root);
     const requestedSelfScope =
@@ -427,16 +508,34 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
       : requestedScope
         ? [requestedScope]
         : manifests;
+    const records = await loadRegistryRecords(root, selectedManifests);
+    const runtime = { version: VERSION, registryRoot: root };
+    if (optionBoolean(parsed, "--show-prompt")) {
+      writePromptPreview(
+        io,
+        parsed,
+        buildAnswerPrompt(question, records, scope, runtime),
+        { command: "ask", scope },
+      );
+      return 0;
+    }
+    const traceDirectory = optionString(parsed, "--trace-prompts");
     const result = await answerQuestion(
       question,
-      await loadRegistryRecords(root, selectedManifests),
+      records,
       {
         scope,
-        runtime: { version: VERSION, registryRoot: root },
+        runtime,
         ...(io.compileAnswer
           ? { compileAnswer: io.compileAnswer }
-          : piBinary
-          ? { compileAnswer: async (prompt: string) => await compileWithPi(prompt, { piBinary }) }
+          : piBinary || traceDirectory
+          ? {
+              compileAnswer: async (prompt: string) =>
+                await compileWithPi(prompt, {
+                  ...(piBinary ? { piBinary } : {}),
+                  ...(traceDirectory ? { traceDirectory } : {}),
+                }),
+            }
           : {}),
       },
     );

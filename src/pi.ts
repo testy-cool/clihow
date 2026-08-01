@@ -1,3 +1,6 @@
+import { randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { runProcess } from "./process.js";
 
 export const PI_ENGINE = {
@@ -9,12 +12,50 @@ export const PI_ENGINE = {
 export interface PiCompileOptions {
   piBinary?: string;
   timeoutMs?: number;
+  traceDirectory?: string;
+}
+
+async function writeTrace(
+  directory: string,
+  createdAt: string,
+  prompt: string,
+  result: Awaited<ReturnType<typeof runProcess>>,
+): Promise<void> {
+  const root = resolve(directory);
+  await mkdir(root, { recursive: true, mode: 0o700 });
+  const timestamp = createdAt.replaceAll(":", "-");
+  const path = join(root, `${timestamp}-${randomUUID()}.json`);
+  await writeFile(
+    path,
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        createdAt,
+        engine: PI_ENGINE,
+        prompt,
+        response: result.stdout,
+        stderr: result.stderr,
+        exitCode: result.exitCode,
+        signal: result.signal,
+        durationMs: result.durationMs,
+        timedOut: result.timedOut,
+        truncated: result.truncated,
+      },
+      null,
+      2,
+    )}\n`,
+    { encoding: "utf8", mode: 0o600, flag: "wx" },
+  );
 }
 
 export async function compileWithPi(
   prompt: string,
   options: PiCompileOptions = {},
 ): Promise<string> {
+  const createdAt = new Date().toISOString();
+  if (options.traceDirectory) {
+    await mkdir(resolve(options.traceDirectory), { recursive: true, mode: 0o700 });
+  }
   const argv = [
     "--provider",
     PI_ENGINE.provider,
@@ -35,6 +76,9 @@ export async function compileWithPi(
     maxOutputBytes: 1024 * 1024,
     timeoutMs: options.timeoutMs ?? 180_000,
   });
+  if (options.traceDirectory) {
+    await writeTrace(options.traceDirectory, createdAt, prompt, result);
+  }
   if (result.timedOut) {
     throw new Error(`Pi timed out after ${String(options.timeoutMs ?? 180_000)}ms`);
   }
