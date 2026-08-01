@@ -78,7 +78,48 @@ cmdmint ask agentconvos "Where did we decide how scraper fallbacks work?"
 
 The first form searches all learned primitives plus cmdmint's active runtime metadata. In an unscoped question, words such as “you” and “your” refer to cmdmint itself. Use the explicit `cmdmint` scope for self-only questions, or supply a learned primitive name to scope the question to that CLI. Pi receives only the active registry metadata, stored manifests, and captured help evidence, with tools and ambient context disabled. Every sufficient answer must return source IDs that `cmdmint` validates against the supplied source packet; unsupported questions return an explicit `insufficientEvidence` result.
 
-When a scoped primitive declares an `ask` binding, cmdmint instead invokes that exact read-only method with the question as its sole required argument. The binding is accepted only when deterministic validation confirms the method, risk, and parameter shape. Interactive runs inherit the terminal so the underlying CLI can show live progress; `--json` captures the result without terminal redraws. `--show-prompt` prints a dry-run invocation with `prompt: null`, because cmdmint sends no model prompt on this delegated path. `--trace-prompts` is rejected for delegated asks rather than silently producing an empty trace.
+When a scoped primitive declares an `ask` binding, cmdmint instead invokes that exact read-only method with the question as its sole required argument. The binding is accepted only when deterministic validation confirms the method, risk, and parameter shape. Interactive delegated runs tee the target's stdout and stderr to the terminal while capturing the final stdout answer; `--json` captures the result without terminal redraws. `--show-prompt` prints a dry-run invocation with `prompt: null`, because cmdmint sends no model prompt on this delegated path. `--trace-prompts` is rejected for delegated asks rather than silently producing an empty trace.
+
+### Continue an ask across terminals
+
+Every successful `ask`—model-backed or delegated—is stored as a durable logical
+thread. The transcript is the source of continuity, not a hidden Pi/Luna or
+provider session:
+
+```bash
+# Start a thread. Plain output keeps the answer on stdout and prints its ID/hint on stderr.
+cmdmint ask agentconvos "find the conversation where I created the MCP selector launcher"
+
+# Continue it from any terminal; the stored scope is restored automatically.
+cmdmint ask --thread THREAD_ID "What repository did that work create?"
+
+# In an interactive terminal, prompt once for the follow-up question.
+cmdmint ask --thread THREAD_ID
+
+# Browse the same threads through agentconvos' Textual picker or fzf finder.
+cmdmint threads
+cmdmint threads --find "MCP selector"
+
+# Inspect the newest-first inventory without starting another process.
+cmdmint threads --json
+```
+
+Threads live at `$CMDMINT_HOME/threads/*.jsonl`, defaulting to
+`~/.local/share/cmdmint/threads`. Thread files are mode `0600`; the containing
+thread and lock directories are private. UUID prefixes are accepted when they
+resolve uniquely. There is no implicit global `last`: use the explicit thread
+ID or the picker. JSON ask output includes `threadId`; plain output preserves
+the answer and writes a `Thread:`/`Continue:` hint to stderr. `--show-prompt`
+reads or renders context without creating or changing a thread.
+
+A cmdmint thread is a research transcript, not a native Claude, Codex, Pi, Agy,
+or OpenCode session. Continue the research with `cmdmint ask --thread
+THREAD_ID`; resume a cited native session separately with its original agent
+ID. Earlier cmdmint answers are navigation context—not authoritative evidence—
+so follow-ups re-check the underlying learned evidence or cited source turns.
+Interactive delegated asks keep the underlying agentconvos Rich cockpit visible
+while cmdmint captures and persists only the completed stdout answer; cockpit
+control output from stderr is not stored in the thread.
 
 ### Call a method
 
@@ -137,6 +178,7 @@ The default registry is:
 ```text
 ~/.local/share/cmdmint/primitives/<name>/manifest.json
 ~/.local/share/cmdmint/primitives/<name>/evidence.json
+~/.local/share/cmdmint/threads/<uuid>.jsonl
 ```
 
 Set `CMDMINT_HOME` to isolate another registry. Files are replaced atomically and written with user-only permissions.

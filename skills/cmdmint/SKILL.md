@@ -28,6 +28,9 @@ Report a failed doctor check instead of guessing how to repair the underlying CL
 - Ask across all learned evidence: `cmdmint ask '<question>' --json`
 - Ask about cmdmint itself: `cmdmint ask cmdmint '<question>' --json`
 - Ask about one primitive: `cmdmint ask <primitive> '<question>' --json`
+- Continue a completed ask: `cmdmint ask --thread <thread-id> '<follow-up>'`
+- Prompt for a follow-up interactively: `cmdmint ask --thread <thread-id>`
+- Browse durable asks: `cmdmint threads`, `cmdmint threads --find '<query>'`, or `cmdmint threads --json`
 - Preview the exact next model prompt: add `--show-prompt --json` to `learn`, `use`, or `ask`
 - Trace actual prompts and captured responses: add `--trace-prompts <directory>` to `learn`, `use`, or `ask`
 - Verify stored probes: `cmdmint test <primitive> --json`
@@ -55,3 +58,26 @@ Treat `<cmdmint-learning-home>` as an isolated temporary probe environment, neve
 If execution reports binary drift, run `cmdmint learn <binary>` again and re-inspect the contract. Do not edit registry JSON or bypass fingerprint checks.
 
 Treat JSON output, exit status, stdout, and stderr as the result. Do not infer success from prose alone.
+
+## Continue durable question threads
+
+Each successful `cmdmint ask` persists a logical thread under
+`$CMDMINT_HOME/threads/*.jsonl` (default:
+`~/.local/share/cmdmint/threads`). Thread files are private (`0600`) and the
+thread/lock directories are private (`0700`). The thread UUID is included in
+JSON output; plain output keeps the answer on stdout and emits a continuation
+hint on stderr. Use an explicit UUID or unique UUID prefix—there is no global
+`last` thread shared between terminals.
+
+The stored thread restores its original scope, so a follow-up can omit the
+primitive. If a primitive is repeated, it must match the stored scope. A
+cmdmint thread is a logical research transcript, distinct from the native
+Claude, Codex, Pi, Agy, or OpenCode session IDs that its answers may cite.
+Earlier assistant answers are navigation context, not authoritative evidence;
+re-check the underlying learned evidence or cited native source turns before
+relying on a material claim.
+
+`cmdmint threads` and `cmdmint threads --find` reuse agentconvos' Textual/fzf
+surfaces. An interactive delegated ask preserves the agentconvos Rich cockpit
+through tee capture and stores only the completed stdout answer, not stderr
+control output. `--show-prompt` is non-mutating and does not publish a thread.
