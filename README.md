@@ -4,7 +4,8 @@ Mint an installed CLI into a tested, agent-discoverable primitive.
 
 ```bash
 cmdmint learn gh
-cmdmint describe gh --json
+cmdmint help gh
+cmdmint ask gh "How do I list repositories?" --json
 cmdmint call gh.repo_list --args-json '{"limit":10}' --dry-run --json
 ```
 
@@ -16,11 +17,12 @@ Agents should not have to rediscover a CLI, remember its provider/model setup, o
 
 ```text
 installed CLI -> bounded evidence -> compiled manifest -> validated argv -> exact CLI
-                                      ^
-                                      +-- discover with list/describe
+                                      ^          ^
+                                      |          +-- ask grounded questions
+                                      +-- discover with help/list/describe
 ```
 
-The model is used only for compilation and natural-language method selection. Probing, validation, storage, drift detection, approval gates, testing, and execution are deterministic.
+The model is used only for compilation, natural-language method selection, and grounded answers over stored registry evidence. Probing, validation, storage, drift detection, approval gates, testing, and execution are deterministic.
 
 ## Install locally
 
@@ -55,12 +57,26 @@ If the first candidate fails deterministic validation, `cmdmint` gives Pi the ex
 ### Discover methods
 
 ```bash
+cmdmint --help
+cmdmint help <primitive>
+cmdmint help <primitive> --json
 cmdmint list --json
 cmdmint describe <primitive> --json
 cmdmint describe <primitive>.<method> --json
 ```
 
-`describe` is the agent-facing schema: it includes parameters, types, defaults, risk, output kind, evidence provenance, and the non-mutating verification probe.
+Root help includes a live summary of every learned primitive. `help <primitive>` is the readable method guide; its JSON form is a compact agent-facing overview. `describe` remains the exact stored contract, including parameters, types, defaults, risk, output kind, evidence provenance, and the non-mutating verification probe.
+
+### Ask what cmdmint learned
+
+```bash
+cmdmint ask "Which learned CLI can manage agent sessions?"
+cmdmint ask herdr "Which operations change state?" --json
+```
+
+The first form searches all learned primitives. Supplying a primitive name scopes the question to that CLI. Pi receives only the stored manifests and captured help evidence, with tools and ambient context disabled. Every sufficient answer must return source IDs that `cmdmint` validates against the supplied registry packet; unsupported questions return an explicit `insufficientEvidence` result.
+
+`ask` explains learned capabilities but never invokes a learned binary. Use `describe` plus `call` when an agent is ready to execute an exact method.
 
 ### Call a method
 
@@ -113,6 +129,7 @@ The package includes [`skills/cmdmint/SKILL.md`](skills/cmdmint/SKILL.md). Insta
 
 - Learning executes the target binary with `--version`, `-V`, `--help`, `-h`, and discovered `<subcommand> --help` probes. Do not learn a binary you would not otherwise execute.
 - Help output is untrusted prompt data. Pi receives no tools and cannot execute it.
+- Grounded answers are model-generated even though their source IDs are validated. Inspect consequential guidance before turning it into a call.
 - Model output is not trusted. Runtime validation rejects unknown evidence, invented commands/options, malformed types, duplicate names, and unsafe probe shapes.
 - Calls use the resolved executable path and check its SHA-256 fingerprint first.
 - Arguments are passed directly to `spawn`; shell syntax remains literal data.
@@ -130,4 +147,4 @@ The integration suite uses real fixture executables rather than PTY or shell moc
 
 ## Status
 
-`cmdmint` is an early primitive. It intentionally starts with conventional top-level CLI help. Nested command discovery, replay fixtures for learned third-party tools, and packaged npm/Homebrew releases are natural follow-ups after the contract survives use in more than one real workflow.
+`cmdmint` is an early primitive with self-describing help and grounded Q&A over its local registry. Deeper recursive command discovery, replay fixtures for learned third-party tools, and packaged npm/Homebrew releases are natural follow-ups after the contract survives use in more than one real workflow.

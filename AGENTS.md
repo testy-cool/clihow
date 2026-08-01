@@ -7,6 +7,7 @@
 ## Layout
 
 - `src/cli.ts`: public command surface
+- `src/answer.ts`: grounded registry Q&A and source-reference validation
 - `src/learner.ts`: isolated help collection and manifest compilation
 - `src/manifest.ts`: untrusted model-output validation and risk escalation
 - `src/invoke.ts`: typed argument binding and deterministic execution

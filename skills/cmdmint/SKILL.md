@@ -21,17 +21,23 @@ Report a failed doctor check instead of guessing how to repair the underlying CL
 ## Choose the narrowest operation
 
 - Learn an unfamiliar executable: `cmdmint learn <binary> --json`
+- See the live learned set: `cmdmint --help`
 - List known primitives: `cmdmint list --json`
+- Read a primitive guide: `cmdmint help <primitive> --json`
 - Inspect an exact contract: `cmdmint describe <primitive>[.<method>] --json`
+- Ask across all learned evidence: `cmdmint ask '<question>' --json`
+- Ask about one primitive: `cmdmint ask <primitive> '<question>' --json`
 - Verify stored probes: `cmdmint test <primitive> --json`
 - Call a known method: `cmdmint call <primitive>.<method> --args-json '<json>' --json`
 - Bind natural-language intent: `cmdmint use <primitive> '<intent>' --dry-run --json`
 
-Prefer `describe` plus `call` when deterministic behavior matters. Use `use` when choosing and binding the method is itself the hard part.
+Use `ask` to discover or explain what the registry supports. Treat `insufficientEvidence: true` as a hard limit instead of filling gaps from memory. Prefer `describe` plus `call` when deterministic behavior matters. Use `use` when choosing and binding the method is itself the hard part.
 
 ## Execute safely
 
 Pass arguments only through `--args-json`; never construct or execute a shell command from a manifest. Start state-changing work with `--dry-run`. Add `--yes` only when the requested operation authorizes the reported `write` or `destructive` action.
+
+`ask` never executes a learned binary. Its JSON `sources` are registry references validated against the exact manifests and evidence supplied to Pi; they ground an explanation but do not authorize a later call.
 
 If execution reports binary drift, run `cmdmint learn <binary>` again and re-inspect the contract. Do not edit registry JSON or bypass fingerprint checks.
 
