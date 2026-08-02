@@ -13,6 +13,10 @@ Turn installed commands into tested methods that you, Codex, Claude, Pi, and oth
 </div>
 
 <p align="center">
+  <img src="docs/assets/clihow-banner.png" alt="Abstract command fragments passing through a compass-like verifier into reusable methods shared by several agents" width="720">
+</p>
+
+<p align="center">
   <img src="docs/assets/clihow-terminal.svg" alt="clihow learning, calling, and testing the included demo CLI" width="720">
 </p>
 
