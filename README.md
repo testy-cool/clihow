@@ -119,14 +119,14 @@ If the first manifest fails validation, Luna gets the exact validator error and 
 `ask` answers from one packet that `clihow` assembles from stored manifests, captured help, and its own runtime facts. Luna receives no tools, sessions, skills, extensions, or ambient agent context. Every sufficient answer must cite source IDs from that packet.
 
 ```bash
-# Search every learned CLI and clihow's own runtime metadata.
-clihow ask "Which learned CLI can manage agent sessions?"
+# Search every learned CLI. Git from the quick start is enough for this query.
+clihow ask "Which learned method shows working tree status?"
 
 # Ask only about clihow.
 clihow ask clihow "Where do you keep your data?" --json
 
-# Ask the demo primitive learned in the quick start.
-clihow ask demo "Which methods did you learn?" --json
+# Ask the Git primitive learned in the quick start.
+clihow ask git "Which methods did you learn?" --json
 ```
 
 Each sufficient answer includes source IDs that `clihow` checks against the exact evidence packet sent to Luna. The response contract has an explicit `insufficientEvidence` result for questions the packet cannot support.
@@ -165,15 +165,15 @@ The interactive `threads` and `threads --find` commands require [agentconvos](ht
 Print the exact next prompt without contacting Pi. For `learn`, previewing still runs the target's bounded version and help probes to assemble the prompt, but saves no primitive:
 
 ```bash
-clihow learn gh --show-prompt
-clihow use gh "list the ten newest repositories" --show-prompt
-clihow ask gh "How do I list repositories?" --show-prompt
+clihow learn git --show-prompt
+clihow use git "show working tree status" --show-prompt
+clihow ask git "How do I inspect the working tree?" --show-prompt
 ```
 
 Record the prompts and captured Pi responses from a normal run:
 
 ```bash
-clihow ask gh "How do I list repositories?" \
+clihow ask git "How do I inspect the working tree?" \
   --trace-prompts ./clihow-prompt-traces \
   --json
 ```
