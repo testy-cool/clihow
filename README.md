@@ -131,7 +131,7 @@ clihow ask git "Which methods did you learn?" --json
 
 Each sufficient answer includes source IDs that `clihow` checks against the exact evidence packet sent to Luna. The response contract has an explicit `insufficientEvidence` result for questions the packet cannot support.
 
-A learned primitive can declare one validated read-only question method. In that case, a scoped ask calls that method instead of sending another model prompt. The `agentconvos` primitive uses this path to run its own agentic conversation search. A real terminal keeps the Rich recall cockpit visible; an agent or other non-TTY caller receives live plain-text stage updates instead of a silent wait. JSON output remains buffered and machine-clean.
+A learned primitive can declare one validated read-only question method. In that case, a scoped ask calls that method instead of sending another model prompt. The `agentconvos` primitive uses this path to run its own agentic conversation search. A real terminal keeps the Rich recall cockpit visible; an agent or other non-TTY caller receives live plain-text stage updates instead of a silent wait. With `--json`, those updates stay on stderr while stdout remains one machine-clean JSON document.
 
 ## Continue a question later
 

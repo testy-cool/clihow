@@ -658,8 +658,9 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
             `Scoped ask for ${requestedScope.name} delegates directly and does not use a clihow model prompt`,
           );
         }
-        const streamDelegate = Boolean(!optionBoolean(parsed, "--json") && !preview);
-        const interactiveDelegate = Boolean(io.interactive && streamDelegate);
+        const streamAnswer = Boolean(!optionBoolean(parsed, "--json") && !preview);
+        const streamProgress = !preview;
+        const interactiveDelegate = Boolean(io.interactive && streamAnswer);
         const invocation = await executeMethod(
           requestedScope,
           binding.method,
@@ -668,13 +669,12 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
           },
           {
             dryRun: preview,
-            stdio: streamDelegate ? "tee" : "capture",
+            stdio: streamAnswer ? "tee" : "capture",
             env: interactiveDelegate
               ? { ...io.env, CLIHOW_STREAM_TTY: "1" }
               : io.env,
-            ...(streamDelegate
-              ? { onStdout: io.stdout, onStderr: io.stderr }
-              : {}),
+            ...(streamAnswer ? { onStdout: io.stdout } : {}),
+            ...(streamProgress ? { onStderr: io.stderr } : {}),
             timeoutMs: 10 * 60_000,
           },
         );
@@ -739,9 +739,6 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
             invocation,
             ...(threadId ? { threadId } : {}),
           });
-        } else if (!streamDelegate) {
-          if (invocation.stdout) io.stdout(invocation.stdout);
-          if (invocation.stderr) io.stderr(invocation.stderr);
         }
         if (threadId && !optionBoolean(parsed, "--json")) writeThreadHint(io, threadId);
         if (invocation.timedOut) return 124;
