@@ -1,10 +1,10 @@
-# Durable Cmdmint Ask Threads Implementation Plan
+# Durable Clihow Ask Threads Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Persist every completed `cmdmint ask` exchange as a durable, searchable thread that can be continued by ID from another terminal and selected through the existing `agentconvos` Textual TUI or `fzf` finder.
+**Goal:** Persist every completed `clihow ask` exchange as a durable, searchable thread that can be continued by ID from another terminal and selected through the existing `agentconvos` Textual TUI or `fzf` finder.
 
-**Architecture:** `cmdmint` owns the authoritative logical-thread transcript under `$CMDMINT_HOME/threads`; it never depends on a hidden Pi or Luna session for continuity. Each follow-up replays a bounded, explicitly labeled transcript into a fresh model or delegated read-only question entrypoint. `agentconvos` gains `cmdmint` as a first-class source and reuses its existing search index, TUI, fuzzy finder, and native-resume dispatch instead of introducing a second picker.
+**Architecture:** `clihow` owns the authoritative logical-thread transcript under `$CLIHOW_HOME/threads`; it never depends on a hidden Pi or Luna session for continuity. Each follow-up replays a bounded, explicitly labeled transcript into a fresh model or delegated read-only question entrypoint. `agentconvos` gains `clihow` as a first-class source and reuses its existing search index, TUI, fuzzy finder, and native-resume dispatch instead of introducing a second picker.
 
 **Tech Stack:** Node.js 22, TypeScript, append-safe JSONL with atomic replacement, Python 3.12, Textual, Rich, `fzf`, Node test runner, Python `unittest`.
 
@@ -16,25 +16,25 @@ The finished interface is:
 
 ```bash
 # Start a durable thread. Plain output stays compatible; the thread ID is written to stderr.
-cmdmint ask agentconvos "find the MCP selector conversation"
+clihow ask agentconvos "find the MCP selector conversation"
 
 # Continue from any terminal. The original scope comes from the stored thread.
-cmdmint ask --thread 019f... "what exactly did turn 26 implement?"
+clihow ask --thread 019f... "what exactly did turn 26 implement?"
 
 # With no follow-up text, prompt once when stdin is interactive.
-cmdmint ask --thread 019f...
+clihow ask --thread 019f...
 
-# Browse all cmdmint threads in the existing Textual application.
-cmdmint threads
+# Browse all clihow threads in the existing Textual application.
+clihow threads
 
 # Use the existing lightweight fzf picker.
-cmdmint threads --find "MCP selector"
+clihow threads --find "MCP selector"
 
 # Machine-readable inventory without starting another process.
-cmdmint threads --json
+clihow threads --json
 
 # Existing agentconvos surfaces also work.
-agentconvos --source cmdmint --search "MCP selector" --json
+agentconvos --source clihow --search "MCP selector" --json
 agentconvos --resume 019f... --dry-run
 ```
 
@@ -47,35 +47,35 @@ Rules:
 - Prior assistant answers are navigation context, not authoritative evidence. Follow-ups must re-check the underlying learned evidence or source conversations.
 - `--show-prompt` remains non-mutating and creates no thread.
 - JSON output includes `threadId`; non-JSON output preserves answer stdout and writes the continuation hint to stderr.
-- Interactive delegated asks retain the live Rich cockpit while cmdmint captures the final stdout answer for persistence.
+- Interactive delegated asks retain the live Rich cockpit while clihow captures the final stdout answer for persistence.
 - Thread files and temporary replacements use mode `0600`; the thread directory uses `0700`.
 - A per-thread lock fails closed on concurrent continuations instead of corrupting order.
 
 ## File map
 
-### `/home/testycool/Work/try-rs/cmdmint`
+### `/home/testycool/Work/try-rs/clihow`
 
 - Create `src/threads.ts`: thread schema, UUID/prefix resolution, atomic JSONL persistence, locking, listing, reference extraction, and bounded follow-up context.
 - Create `src/thread-browser.ts`: optional bridge to `agentconvos` for Textual/fzf browsing.
 - Modify `src/process.ts`: add capture-and-forward (`tee`) process mode.
 - Modify `src/invoke.ts`: pass tee callbacks and an explicit child environment.
-- Modify `src/cli.ts`: `--thread`, interactive follow-up prompting, automatic persistence, `cmdmint threads`, help, and JSON contracts.
+- Modify `src/cli.ts`: `--thread`, interactive follow-up prompting, automatic persistence, `clihow threads`, help, and JSON contracts.
 - Create `tests/threads.test.ts`: storage, prefix, locking, permissions, context bounding, and corruption tests.
 - Modify `tests/process.test.ts`, `tests/invoke.test.ts`, and `tests/cli.test.ts`: tee and public command behavior.
-- Modify `README.md` and `skills/cmdmint/SKILL.md`: durable-thread usage and the logical-thread/provider-session distinction.
+- Modify `README.md` and `skills/clihow/SKILL.md`: durable-thread usage and the logical-thread/provider-session distinction.
 
 ### `/home/testycool/Work/convo-explorer`
 
-- Modify `src/agentconvos/parser.py`: detect and parse cmdmint JSONL threads.
-- Modify `src/agentconvos/scanner.py`: scan `$CMDMINT_HOME/threads` and group by cwd.
-- Modify `src/agentconvos/app.py`: source labels/order/filter, TUI resume, fzf visibility, and `_resume_cmd("cmdmint", ...)`.
-- Modify `src/agentconvos/recall.py`: preserve the cockpit through cmdmint tee mode and treat prior cmdmint answers as navigation rather than primary evidence.
-- Create `tests/test_cmdmint_threads.py`: parser, scanner, filtering, resume argv, and forced-terminal tests.
-- Modify `README.md`: document cmdmint as a source and distinguish continuing a cmdmint research thread from resuming its cited native agent session.
+- Modify `src/agentconvos/parser.py`: detect and parse clihow JSONL threads.
+- Modify `src/agentconvos/scanner.py`: scan `$CLIHOW_HOME/threads` and group by cwd.
+- Modify `src/agentconvos/app.py`: source labels/order/filter, TUI resume, fzf visibility, and `_resume_cmd("clihow", ...)`.
+- Modify `src/agentconvos/recall.py`: preserve the cockpit through clihow tee mode and treat prior clihow answers as navigation rather than primary evidence.
+- Create `tests/test_clihow_threads.py`: parser, scanner, filtering, resume argv, and forced-terminal tests.
+- Modify `README.md`: document clihow as a source and distinguish continuing a clihow research thread from resuming its cited native agent session.
 
 ---
 
-### Task 1: Add the durable cmdmint thread store
+### Task 1: Add the durable clihow thread store
 
 **Files:**
 - Create: `src/threads.ts`
@@ -101,7 +101,7 @@ import {
 } from "../src/threads.ts";
 
 test("stores and resolves a completed thread by UUID prefix", async () => {
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-threads-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-threads-"));
   const thread = await createThread(root, {
     scope: "agentconvos",
     cwd: "/work/demo",
@@ -116,7 +116,7 @@ test("stores and resolves a completed thread by UUID prefix", async () => {
   assert.equal((await loadThread(root, thread.id.slice(0, 8))).id, thread.id);
   assert.equal((await listThreads(root))[0]?.turns.length, 2);
   assert.equal((await stat(join(root, "threads", `${thread.id}.jsonl`))).mode & 0o777, 0o600);
-  assert.match(await readFile(join(root, "threads", `${thread.id}.jsonl`), "utf8"), /cmdmint_thread/);
+  assert.match(await readFile(join(root, "threads", `${thread.id}.jsonl`), "utf8"), /clihow_thread/);
 });
 
 test("follow-up context is bounded and labels prior answers as untrusted", async () => {
@@ -144,7 +144,7 @@ test("follow-up context is bounded and labels prior answers as untrusted", async
 });
 
 test("rejects a second writer while a thread lock is held", async () => {
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-thread-lock-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-thread-lock-"));
   const thread = await createThread(root, {
     scope: "agentconvos",
     cwd: "/work/demo",
@@ -232,14 +232,14 @@ export async function withThreadLock<T>(
 Serialize one metadata record followed by message records:
 
 ```json
-{"type":"cmdmint_thread","schemaVersion":1,"id":"UUID","title":"First question","scope":"agentconvos","cwd":"/work/demo","createdAt":"ISO","updatedAt":"ISO"}
+{"type":"clihow_thread","schemaVersion":1,"id":"UUID","title":"First question","scope":"agentconvos","cwd":"/work/demo","createdAt":"ISO","updatedAt":"ISO"}
 {"type":"message","role":"user","text":"First question","timestamp":"ISO"}
 {"type":"message","role":"assistant","text":"Answer","timestamp":"ISO","sources":["SOURCE_ID"]}
 ```
 
-`createThread` allocates an in-memory thread and ensures the private directories exist, but does not publish a searchable transcript. `recordExchange` receives that thread object, appends the completed user/assistant pair, writes the complete next JSONL to a sibling temporary file with mode `0600`, then renames it. Existing continuations load the thread inside the lock before calling `recordExchange`. Lock files live under `$CMDMINT_HOME/thread-locks`; use exclusive creation and always remove the lock in `finally`. Reject invalid IDs before constructing paths.
+`createThread` allocates an in-memory thread and ensures the private directories exist, but does not publish a searchable transcript. `recordExchange` receives that thread object, appends the completed user/assistant pair, writes the complete next JSONL to a sibling temporary file with mode `0600`, then renames it. Existing continuations load the thread inside the lock before calling `recordExchange`. Lock files live under `$CLIHOW_HOME/thread-locks`; use exclusive creation and always remove the lock in `finally`. Reject invalid IDs before constructing paths.
 
-- [ ] **Step 4: Run focused and full cmdmint checks**
+- [ ] **Step 4: Run focused and full clihow checks**
 
 Run:
 
@@ -254,7 +254,7 @@ Expected: all tests and `tsc` pass.
 
 ```bash
 git add src/threads.ts tests/threads.test.ts
-git commit -m "Persist durable cmdmint ask threads"
+git commit -m "Persist durable clihow ask threads"
 ```
 
 ---
@@ -342,7 +342,7 @@ git commit -m "Capture delegated output while streaming it live"
 
 ---
 
-### Task 3: Make `cmdmint ask` create and continue threads
+### Task 3: Make `clihow ask` create and continue threads
 
 **Files:**
 - Create: `src/thread-browser.ts`
@@ -399,12 +399,12 @@ await runCli(["threads", "--find", "MCP", "selector"], {
   },
 });
 assert.deepEqual(observed, [
-  ["--source", "cmdmint"],
-  ["--source", "cmdmint", "--find", "MCP selector"],
+  ["--source", "clihow"],
+  ["--source", "clihow", "--find", "MCP selector"],
 ]);
 ```
 
-Assert that a failed ask and every `--show-prompt` path leave `$CMDMINT_HOME/threads` unchanged. Assert that interactive delegated asks use `tee`, set `CMDMINT_STREAM_TTY=1`, preserve the Rich stderr stream, and persist only the final stdout answer.
+Assert that a failed ask and every `--show-prompt` path leave `$CLIHOW_HOME/threads` unchanged. Assert that interactive delegated asks use `tee`, set `CLIHOW_STREAM_TTY=1`, preserve the Rich stderr stream, and persist only the final stdout answer.
 
 - [ ] **Step 2: Run focused tests and verify RED**
 
@@ -456,7 +456,7 @@ For delegated asks, replace interactive `inherit` with:
 ```ts
 {
   stdio: "tee",
-  env: { ...io.env, CMDMINT_STREAM_TTY: "1" },
+  env: { ...io.env, CLIHOW_STREAM_TTY: "1" },
   onStdout: io.stdout,
   onStderr: io.stderr,
   timeoutMs: 10 * 60_000,
@@ -467,22 +467,22 @@ After a successful answer, create or update the thread under `withThreadLock`. N
 
 ```text
 Thread: UUID
-Continue: cmdmint ask --thread UUID "follow-up"
+Continue: clihow ask --thread UUID "follow-up"
 ```
 
 Model-backed asks store `result.answer` and `result.sources[].id`. Delegated asks store `invocation.stdout.trim()` and UUID-like references extracted from the answer. Do not store Rich control output from stderr.
 
-- [ ] **Step 5: Add `cmdmint threads` and root help**
+- [ ] **Step 5: Add `clihow threads` and root help**
 
 Behavior:
 
 ```text
-cmdmint threads --json                  native JSON inventory, newest first
-cmdmint threads                         agentconvos --source cmdmint
-cmdmint threads --find [QUERY...]       agentconvos --source cmdmint --find QUERY
+clihow threads --json                  native JSON inventory, newest first
+clihow threads                         agentconvos --source clihow
+clihow threads --find [QUERY...]       agentconvos --source clihow --find QUERY
 ```
 
-If `agentconvos` is unavailable, print a direct error that recommends `cmdmint threads --json`; do not silently fall back to another picker.
+If `agentconvos` is unavailable, print a direct error that recommends `clihow threads --json`; do not silently fall back to another picker.
 
 - [ ] **Step 6: Verify and commit**
 
@@ -490,25 +490,25 @@ If `agentconvos` is unavailable, print a direct error that recommends `cmdmint t
 pnpm exec tsx --test tests/cli.test.ts tests/help.test.ts
 pnpm check
 git add src/cli.ts src/thread-browser.ts tests/cli.test.ts tests/help.test.ts
-git commit -m "Continue cmdmint questions through durable threads"
+git commit -m "Continue clihow questions through durable threads"
 ```
 
 ---
 
-### Task 4: Index cmdmint threads in agentconvos
+### Task 4: Index clihow threads in agentconvos
 
 **Files:**
 - Modify: `/home/testycool/Work/convo-explorer/src/agentconvos/parser.py`
 - Modify: `/home/testycool/Work/convo-explorer/src/agentconvos/scanner.py`
-- Create: `/home/testycool/Work/convo-explorer/tests/test_cmdmint_threads.py`
+- Create: `/home/testycool/Work/convo-explorer/tests/test_clihow_threads.py`
 
 - [ ] **Step 1: Write failing parser and scanner tests**
 
-Create a real three-line cmdmint JSONL fixture in a temporary `$CMDMINT_HOME/threads` directory and assert:
+Create a real three-line clihow JSONL fixture in a temporary `$CLIHOW_HOME/threads` directory and assert:
 
 ```python
 meta = get_meta(thread_path)
-self.assertEqual(meta.source, "cmdmint")
+self.assertEqual(meta.source, "clihow")
 self.assertEqual(meta.uuid, thread_id)
 self.assertEqual(meta.cwd, "/work/demo")
 self.assertEqual(meta.preview, "Find the MCP selector conversation")
@@ -517,51 +517,51 @@ self.assertEqual(
     [("user", "Find it"), ("assistant", "Found session 019f...")],
 )
 
-projects = scan_projects(source="cmdmint")
+projects = scan_projects(source="clihow")
 self.assertEqual([c.uuid for p in projects for c in p.conversations], [thread_id])
 ```
 
-Also assert malformed records are ignored safely, updated timestamps come from the metadata record, `$CMDMINT_HOME` overrides the default, and `source="codex"` excludes cmdmint.
+Also assert malformed records are ignored safely, updated timestamps come from the metadata record, `$CLIHOW_HOME` overrides the default, and `source="codex"` excludes clihow.
 
 - [ ] **Step 2: Run and verify RED**
 
 ```bash
-.venv/bin/python -m unittest tests.test_cmdmint_threads -v
+.venv/bin/python -m unittest tests.test_clihow_threads -v
 ```
 
-Expected: FAIL because cmdmint is detected as Claude and is not scanned.
+Expected: FAIL because clihow is detected as Claude and is not scanned.
 
 - [ ] **Step 3: Add the parser format**
 
-Teach `_detect_format` to return `cmdmint` only when the first record is a dict with all of:
+Teach `_detect_format` to return `clihow` only when the first record is a dict with all of:
 
 ```python
-record.get("type") == "cmdmint_thread"
+record.get("type") == "clihow_thread"
 record.get("schemaVersion") == 1
 isinstance(record.get("id"), str)
 ```
 
-Implement `_get_meta_cmdmint` and `_parse_jsonl_cmdmint`. Only `role in {"user", "assistant"}` and non-empty string `text` become turns. Metadata maps `id -> uuid`, `title -> slug`, `updatedAt -> timestamp`, `cwd -> cwd`, first user text or title -> preview, and literal `cmdmint -> source`.
+Implement `_get_meta_clihow` and `_parse_jsonl_clihow`. Only `role in {"user", "assistant"}` and non-empty string `text` become turns. Metadata maps `id -> uuid`, `title -> slug`, `updatedAt -> timestamp`, `cwd -> cwd`, first user text or title -> preview, and literal `clihow -> source`.
 
 - [ ] **Step 4: Scan and group the new source**
 
 Add:
 
 ```python
-def _cmdmint_threads_dir() -> Path:
-    root = Path(os.environ.get("CMDMINT_HOME", Path.home() / ".local" / "share" / "cmdmint"))
+def _clihow_threads_dir() -> Path:
+    root = Path(os.environ.get("CLIHOW_HOME", Path.home() / ".local" / "share" / "clihow"))
     return root / "threads"
 ```
 
-Scan `*.jsonl`, use `_get_meta_cached`, group by `cwd`, and expose virtual projects as `[cmdmint] CWD`. Update cache version because format detection and source coverage changed. Update the source docstring.
+Scan `*.jsonl`, use `_get_meta_cached`, group by `cwd`, and expose virtual projects as `[clihow] CWD`. Update cache version because format detection and source coverage changed. Update the source docstring.
 
 - [ ] **Step 5: Verify and commit the parser/scanner checkpoint**
 
 ```bash
-.venv/bin/python -m unittest tests.test_cmdmint_threads -v
+.venv/bin/python -m unittest tests.test_clihow_threads -v
 .venv/bin/python -m unittest discover -s tests
-git add src/agentconvos/parser.py src/agentconvos/scanner.py tests/test_cmdmint_threads.py
-git commit -m "Index cmdmint question threads as conversations"
+git add src/agentconvos/parser.py src/agentconvos/scanner.py tests/test_clihow_threads.py
+git commit -m "Index clihow question threads as conversations"
 ```
 
 ---
@@ -571,7 +571,7 @@ git commit -m "Index cmdmint question threads as conversations"
 **Files:**
 - Modify: `/home/testycool/Work/convo-explorer/src/agentconvos/app.py`
 - Modify: `/home/testycool/Work/convo-explorer/src/agentconvos/recall.py`
-- Modify: `/home/testycool/Work/convo-explorer/tests/test_cmdmint_threads.py`
+- Modify: `/home/testycool/Work/convo-explorer/tests/test_clihow_threads.py`
 - Modify: `/home/testycool/Work/convo-explorer/tests/test_recall.py`
 
 - [ ] **Step 1: Write failing source/resume/TTY tests**
@@ -580,33 +580,33 @@ Assert the exact resume contract:
 
 ```python
 self.assertEqual(
-    _resume_cmd("cmdmint", thread_id),
-    ["cmdmint", "ask", "--thread", thread_id],
+    _resume_cmd("clihow", thread_id),
+    ["clihow", "ask", "--thread", thread_id],
 )
 ```
 
-Patch `sys.argv` and `scan_projects` to prove `agentconvos --source cmdmint --list --json` accepts the source. Add a TUI unit assertion that cmdmint is in the resumable-source set. Add a recall assertion that `_is_tty(io.StringIO())` becomes true only while `CMDMINT_STREAM_TTY=1` is set.
+Patch `sys.argv` and `scan_projects` to prove `agentconvos --source clihow --list --json` accepts the source. Add a TUI unit assertion that clihow is in the resumable-source set. Add a recall assertion that `_is_tty(io.StringIO())` becomes true only while `CLIHOW_STREAM_TTY=1` is set.
 
 - [ ] **Step 2: Run and verify RED**
 
 ```bash
-.venv/bin/python -m unittest tests.test_cmdmint_threads tests.test_recall -v
+.venv/bin/python -m unittest tests.test_clihow_threads tests.test_recall -v
 ```
 
-- [ ] **Step 3: Wire cmdmint through every existing generic surface**
+- [ ] **Step 3: Wire clihow through every existing generic surface**
 
 Apply these exact public mappings:
 
 ```python
-_SOURCE_STYLE["cmdmint"] = ("Cmdmint", "bold #a78bfa")
-_SOURCE_ORDER.append("cmdmint")
+_SOURCE_STYLE["clihow"] = ("Clihow", "bold #a78bfa")
+_SOURCE_ORDER.append("clihow")
 
 def _resume_cmd(source: str, uuid: str, extra_args=None, yolo: bool = False):
-    if source == "cmdmint":
-        return ["cmdmint", "ask", "--thread", uuid] + (extra_args or [])
+    if source == "clihow":
+        return ["clihow", "ask", "--thread", uuid] + (extra_args or [])
 ```
 
-Add `cmdmint` to `--source` and `--convo` choices, to the TUI resume whitelist, and to latest-resumable filtering. Do not add a provider-specific yolo flag for cmdmint. The existing fzf row, preview, full-text index, ID resolution, and Textual tree must remain generic and need no fork.
+Add `clihow` to `--source` and `--convo` choices, to the TUI resume whitelist, and to latest-resumable filtering. Do not add a provider-specific yolo flag for clihow. The existing fzf row, preview, full-text index, ID resolution, and Textual tree must remain generic and need no fork.
 
 - [ ] **Step 4: Preserve the Rich cockpit through tee capture**
 
@@ -614,7 +614,7 @@ Change `_is_tty` to:
 
 ```python
 def _is_tty(stream: TextIO) -> bool:
-    if os.environ.get("CMDMINT_STREAM_TTY") == "1":
+    if os.environ.get("CLIHOW_STREAM_TTY") == "1":
         return True
     try:
         return bool(stream.isatty())
@@ -625,16 +625,16 @@ def _is_tty(stream: TextIO) -> bool:
 Add this retrieval rule to `_recall_prompt`:
 
 ```text
-Cmdmint threads are prior retrieval transcripts. Use them to recover useful search terms and cited source session IDs, but verify every material claim in the original Claude, Codex, Pi, Agy, or OpenCode turns before answering.
+Clihow threads are prior retrieval transcripts. Use them to recover useful search terms and cited source session IDs, but verify every material claim in the original Claude, Codex, Pi, Agy, or OpenCode turns before answering.
 ```
 
 - [ ] **Step 5: Verify and commit**
 
 ```bash
-.venv/bin/python -m unittest tests.test_cmdmint_threads tests.test_recall -v
+.venv/bin/python -m unittest tests.test_clihow_threads tests.test_recall -v
 .venv/bin/python -m unittest discover -s tests
-git add src/agentconvos/app.py src/agentconvos/recall.py tests/test_cmdmint_threads.py tests/test_recall.py
-git commit -m "Resume cmdmint threads from the conversation picker"
+git add src/agentconvos/app.py src/agentconvos/recall.py tests/test_clihow_threads.py tests/test_recall.py
+git commit -m "Resume clihow threads from the conversation picker"
 ```
 
 ---
@@ -643,84 +643,84 @@ git commit -m "Resume cmdmint threads from the conversation picker"
 
 **Files:**
 - Modify: `README.md`
-- Modify: `skills/cmdmint/SKILL.md`
+- Modify: `skills/clihow/SKILL.md`
 - Modify: `/home/testycool/Work/convo-explorer/README.md`
 
 - [ ] **Step 1: Update user and agent documentation**
 
 Document:
 
-- Storage: `$CMDMINT_HOME/threads/*.jsonl`, defaulting to `~/.local/share/cmdmint/threads`, mode `0600`.
+- Storage: `$CLIHOW_HOME/threads/*.jsonl`, defaulting to `~/.local/share/clihow/threads`, mode `0600`.
 - Commands: new ask, `--thread`, prompt-on-resume, `threads`, `threads --find`, and `threads --json`.
-- Distinction: continuing a cmdmint research thread versus resuming the cited native agent conversation.
+- Distinction: continuing a clihow research thread versus resuming the cited native agent conversation.
 - Safety: explicit IDs/picker rather than one global `last`; prior answers are re-verified.
 - Output: JSON `threadId`, plain stderr continuation hint, live TUI preservation.
 
 - [ ] **Step 2: Run both complete suites**
 
 ```bash
-cd /home/testycool/Work/try-rs/cmdmint && pnpm check
+cd /home/testycool/Work/try-rs/clihow && pnpm check
 cd /home/testycool/Work/convo-explorer && .venv/bin/python -m unittest discover -s tests
 ```
 
 - [ ] **Step 3: Commit documentation separately in each repository**
 
 ```bash
-cd /home/testycool/Work/try-rs/cmdmint
-git add README.md skills/cmdmint/SKILL.md
+cd /home/testycool/Work/try-rs/clihow
+git add README.md skills/clihow/SKILL.md
 git commit -m "Document durable question threads"
 
 cd /home/testycool/Work/convo-explorer
 git add README.md
-git commit -m "Document cmdmint thread discovery and resume"
+git commit -m "Document clihow thread discovery and resume"
 ```
 
 - [ ] **Step 4: Install the exact tested checkouts**
 
 ```bash
-cd /home/testycool/Work/try-rs/cmdmint
+cd /home/testycool/Work/try-rs/clihow
 pnpm install
 pnpm build
 pnpm link --global
-cmdmint doctor --json
+clihow doctor --json
 
 cd /home/testycool/Work/convo-explorer
 uv tool install --force --editable ".[ai]"
 agentconvos --help | tail -8
 ```
 
-Expected: doctor is green; global `agentconvos` includes `cmdmint` in `--source` choices.
+Expected: doctor is green; global `agentconvos` includes `clihow` in `--source` choices.
 
 - [ ] **Step 5: Run the real two-terminal smoke test**
 
 In the Luna worker pane:
 
 ```bash
-cmdmint ask agentconvos "find the conversation where I created the MCP selector launcher"
+clihow ask agentconvos "find the conversation where I created the MCP selector launcher"
 ```
 
 Record the emitted thread UUID and confirm the Rich cockpit completes. In a different Herdr pane:
 
 ```bash
-cmdmint ask --thread THREAD_UUID "What repository did that work create, and which turns prove it?"
+clihow ask --thread THREAD_UUID "What repository did that work create, and which turns prove it?"
 ```
 
 Acceptance:
 
 - The second command needs no primitive name and resolves the original `agentconvos` scope.
 - The second command displays the live cockpit and answers from original source turns.
-- `cmdmint threads --json` shows one thread with four turns.
-- `agentconvos --source cmdmint --search "MCP selector" --json` finds the same UUID.
-- `agentconvos --resume THREAD_UUID --dry-run` prints `cmdmint ask --thread THREAD_UUID`.
-- `cmdmint threads` opens the existing Textual picker with a Cmdmint source group, preview, and `R` resume action.
-- `cmdmint threads --find "MCP selector"` opens the existing fzf picker and shows the same thread.
+- `clihow threads --json` shows one thread with four turns.
+- `agentconvos --source clihow --search "MCP selector" --json` finds the same UUID.
+- `agentconvos --resume THREAD_UUID --dry-run` prints `clihow ask --thread THREAD_UUID`.
+- `clihow threads` opens the existing Textual picker with a Clihow source group, preview, and `R` resume action.
+- `clihow threads --find "MCP selector"` opens the existing fzf picker and shows the same thread.
 
 - [ ] **Step 6: Final clean-tree and commit audit**
 
 ```bash
-git -C /home/testycool/Work/try-rs/cmdmint status --short --branch
+git -C /home/testycool/Work/try-rs/clihow status --short --branch
 git -C /home/testycool/Work/convo-explorer status --short --branch
-git -C /home/testycool/Work/try-rs/cmdmint log -5 --oneline
+git -C /home/testycool/Work/try-rs/clihow log -5 --oneline
 git -C /home/testycool/Work/convo-explorer log -5 --oneline
 ```
 
@@ -735,7 +735,7 @@ Both worktrees must be clean. Report every full commit hash and exact commit mes
 - Plain, JSON, model-backed, delegated, preview, failure, interactive, and non-interactive paths have tests.
 - Live TUI output remains visible while the final answer is captured.
 - The current question is not searchable until its answer succeeds, preventing self-retrieval.
-- Agentconvos indexes cmdmint without duplicating the picker or search engine.
+- Agentconvos indexes clihow without duplicating the picker or search engine.
 - TUI, fzf, full-text search, preview, JSON listing, ID resolution, and resume are covered.
-- Resuming a cmdmint research thread remains distinct from resuming a cited Codex/Claude/Pi/Agy/OpenCode session.
+- Resuming a clihow research thread remains distinct from resuming a cited Codex/Claude/Pi/Agy/OpenCode session.
 - Both repositories have isolated commits and full-suite plus live canary gates.

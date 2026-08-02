@@ -44,7 +44,7 @@ test("records the exact prompt and captured response with private POSIX modes", 
   skip: process.platform === "win32",
 }, async () => {
   const { compileWithPi } = await import("../src/pi.ts");
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-pi-trace-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-pi-trace-"));
   const directory = join(root, "created-traces");
   try {
     const output = await compileWithPi("trace this exact prompt", {
@@ -74,7 +74,7 @@ test("records the exact prompt and captured response with private POSIX modes", 
 
 test("caps captured Pi stdout and stderr at 1 MiB and traces truncation", async () => {
   const { compileWithPi } = await import("../src/pi.ts");
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-pi-capture-limit-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-pi-capture-limit-"));
   const directory = join(root, "traces");
   try {
     const output = await compileWithPi("emit oversized capture", {

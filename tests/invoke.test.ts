@@ -75,13 +75,13 @@ test("binds validated arguments without creating a shell command", async () => {
   assert.equal(typeof invokeModule?.buildMethodArgv, "function");
 
   const argv = invokeModule!.buildMethodArgv(greetMethod, {
-    name: "$(touch /tmp/cmdmint-never)",
+    name: "$(touch /tmp/clihow-never)",
     loud: true,
   });
 
   assert.deepEqual(argv, [
     "greet",
-    "$(touch /tmp/cmdmint-never)",
+    "$(touch /tmp/clihow-never)",
     "--loud",
   ]);
 });
@@ -165,17 +165,17 @@ test("refuses execution after the learned binary changes", async () => {
 
   await assert.rejects(
     executeMethod(manifest, "greet", { name: "Ada" }),
-    /Binary drift detected.*run cmdmint learn again/,
+    /Binary drift detected.*run clihow learn again/,
   );
 });
 
 test("forwards invocation environment and tee callbacks without a shell", async () => {
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-invoke-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-invoke-"));
   const binaryPath = join(root, "echo-env.mjs");
   try {
     await writeFile(
       binaryPath,
-      "#!/usr/bin/env node\nprocess.stdout.write(JSON.stringify({value: process.env.CMDMINT_TEST_VALUE, arg: process.argv[2]})); process.stderr.write('live-warning');\n",
+      "#!/usr/bin/env node\nprocess.stdout.write(JSON.stringify({value: process.env.CLIHOW_TEST_VALUE, arg: process.argv[2]})); process.stderr.write('live-warning');\n",
       { encoding: "utf8", mode: 0o700 },
     );
     await chmod(binaryPath, 0o700);
@@ -202,10 +202,10 @@ test("forwards invocation environment and tee callbacks without a shell", async 
     const result = await executeMethod(
       manifest,
       "echo",
-      { value: "$(touch /tmp/cmdmint-invoke-must-not-run)" },
+      { value: "$(touch /tmp/clihow-invoke-must-not-run)" },
       {
         stdio: "tee",
-        env: { PATH: process.env.PATH ?? "", CMDMINT_TEST_VALUE: "isolated" },
+        env: { PATH: process.env.PATH ?? "", CLIHOW_TEST_VALUE: "isolated" },
         onStdout: (value) => liveStdout.push(value),
         onStderr: (value) => liveStderr.push(value),
       },
@@ -213,7 +213,7 @@ test("forwards invocation environment and tee callbacks without a shell", async 
 
     assert.deepEqual(JSON.parse(result.stdout), {
       value: "isolated",
-      arg: "$(touch /tmp/cmdmint-invoke-must-not-run)",
+      arg: "$(touch /tmp/clihow-invoke-must-not-run)",
     });
     assert.equal(result.stderr, "live-warning");
     assert.equal(liveStdout.join(""), result.stdout);

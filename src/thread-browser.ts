@@ -9,7 +9,7 @@ export async function browseThreads(argv: string[]): Promise<number> {
     });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      throw new Error("agentconvos is unavailable; use cmdmint threads --json");
+      throw new Error("agentconvos is unavailable; use clihow threads --json");
     }
     throw error;
   }

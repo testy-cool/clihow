@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`cmdmint` compiles installed CLIs into evidence-backed manifests, then invokes them without a shell. Preserve the split between agentic compilation/selection and deterministic validation/execution.
+`clihow` compiles installed CLIs into evidence-backed manifests, then invokes them without a shell. Preserve the split between agentic compilation/selection and deterministic validation/execution.
 
 ## Layout
 
@@ -18,7 +18,7 @@
 - `src/verify.ts`: non-mutating help probes
 - `tests/`: Node test-runner contract and integration coverage
 - `fixtures/`: harmless executable test doubles
-- `skills/cmdmint/`: bundled agent-discovery skill
+- `skills/clihow/`: bundled agent-discovery skill
 
 ## Development rules
 
@@ -38,15 +38,15 @@
   search-index reconciliation must still receive the complete conversation
   universe, and the unfiltered path should reuse its existing scan.
 - Add runtime dependencies only when the standard library cannot express the contract clearly.
-- Use `CMDMINT_HOME` and fixture executables in tests; never touch the user's real registry.
+- Use `CLIHOW_HOME` and fixture executables in tests; never touch the user's real registry.
 
 ## Verification
 
-Run `pnpm check` for every checkpoint. Changes affecting the installed CLI or Pi integration also require a real `cmdmint doctor`, live `cmdmint learn`, and deterministic `cmdmint call` canary.
+Run `pnpm check` for every checkpoint. Changes affecting the installed CLI or Pi integration also require a real `clihow doctor`, live `clihow learn`, and deterministic `clihow call` canary.
 
 Thread or picker changes require an installed-command smoke with a real ask and
 follow-up, JSON inventory, agentconvos search/resume, Textual, and fzf. For the
 Textual check, wait for `INDEX READY`, confirm the filtered tree did not shrink
 the shared index, sample CPU after indexing, quit normally, and verify the pane
-returned to its shell with no surviving cmdmint/agentconvos child process. A
+returned to its shell with no surviving clihow/agentconvos child process. A
 picker that merely renders is not an accepted smoke test.

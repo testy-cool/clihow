@@ -83,7 +83,7 @@ async function runProbe(
 }
 
 function redactLearningDirectory(value: string, directory: string): string {
-  return value.replaceAll(directory, "<cmdmint-learning-home>");
+  return value.replaceAll(directory, "<clihow-learning-home>");
 }
 
 function asEvidence(
@@ -262,7 +262,7 @@ function parseDraft(output: string): PrimitiveDraft {
 export async function buildLearningPrompt(
   options: LearningPromptOptions,
 ): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "cmdmint-learn-"));
+  const directory = await mkdtemp(join(tmpdir(), "clihow-learn-"));
   try {
     const { evidence } = await collectLearningInputs(options, directory);
     return compilerPrompt(options.name, evidence);
@@ -274,7 +274,7 @@ export async function buildLearningPrompt(
 export async function learnPrimitive(
   options: LearnPrimitiveOptions,
 ): Promise<LearnPrimitiveResult> {
-  const directory = await mkdtemp(join(tmpdir(), "cmdmint-learn-"));
+  const directory = await mkdtemp(join(tmpdir(), "clihow-learn-"));
   try {
     const { binary, evidence } = await collectLearningInputs(options, directory);
     const compileDraft =

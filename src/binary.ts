@@ -19,7 +19,7 @@ export async function assertBinaryUnchanged(
 ): Promise<void> {
   if ((await sha256File(binary.path)) !== binary.sha256) {
     throw new Error(
-      `Binary drift detected for ${primitiveName}; run cmdmint learn again`,
+      `Binary drift detected for ${primitiveName}; run clihow learn again`,
     );
   }
 }

@@ -2,8 +2,8 @@
 
 process.stdout.write(
   JSON.stringify({
-    answer: "cmdmint uses its active registry.",
-    sourceIds: ["cmdmint:runtime"],
+    answer: "clihow uses its active registry.",
+    sourceIds: ["clihow:runtime"],
     insufficientEvidence: false,
   }),
 );

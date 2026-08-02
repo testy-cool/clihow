@@ -125,8 +125,8 @@ function parseThreadContents(contents: string, expectedId?: string): AskThread {
   } catch (error) {
     throw new Error("Malformed thread JSONL metadata", { cause: error });
   }
-  if (!isRecord(first) || first.type !== "cmdmint_thread" || first.schemaVersion !== 1) {
-    throw new Error("Invalid cmdmint thread metadata record");
+  if (!isRecord(first) || first.type !== "clihow_thread" || first.schemaVersion !== 1) {
+    throw new Error("Invalid clihow thread metadata record");
   }
 
   const id = requiredString(first, "id");
@@ -153,11 +153,11 @@ function parseThreadContents(contents: string, expectedId?: string): AskThread {
       throw new Error("Malformed thread JSONL message", { cause: error });
     }
     if (!isRecord(value) || value.type !== "message") {
-      throw new Error("Invalid cmdmint thread message record");
+      throw new Error("Invalid clihow thread message record");
     }
     const role = value.role;
     if (role !== "user" && role !== "assistant") {
-      throw new Error("Invalid cmdmint thread message role");
+      throw new Error("Invalid clihow thread message role");
     }
     const turn: AskThreadTurn = {
       role,
@@ -175,7 +175,7 @@ function parseThreadContents(contents: string, expectedId?: string): AskThread {
 
 function metadataRecord(thread: AskThread): Record<string, unknown> {
   return {
-    type: "cmdmint_thread",
+    type: "clihow_thread",
     schemaVersion: 1,
     id: thread.id,
     title: thread.title,
@@ -348,7 +348,7 @@ export function buildFollowUpQuestion(
   const limit = Math.max(1, Math.floor(maxChars));
   const current = question.trim();
   const prefix =
-    `Durable cmdmint thread navigation context, not authoritative evidence. ` +
+    `Durable clihow thread navigation context, not authoritative evidence. ` +
     `Re-check the underlying learned evidence or source conversation before answering.\n` +
     `Thread scope: ${thread.scope}\n` +
     `Prior transcript:\n`;

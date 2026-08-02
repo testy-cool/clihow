@@ -7,7 +7,7 @@ import type { EvidenceBundle, PrimitiveManifest } from "./types.js";
 const NAME_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
 
 export function registryHome(env: NodeJS.ProcessEnv = process.env): string {
-  return env.CMDMINT_HOME ?? join(homedir(), ".local", "share", "cmdmint");
+  return env.CLIHOW_HOME ?? join(homedir(), ".local", "share", "clihow");
 }
 
 function primitiveDirectory(root: string, name: string): string {

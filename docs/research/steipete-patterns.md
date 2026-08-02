@@ -1,4 +1,4 @@
-# Steinberger repo patterns used by cmdmint
+# Steinberger repo patterns used by clihow
 
 Checked against the live repositories on 2026-07-31.
 

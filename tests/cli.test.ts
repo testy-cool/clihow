@@ -122,7 +122,7 @@ async function saveQuestionPrimitive(root: string, binaryPath = fixturePath): Pr
 
 test("scoped ask delegates to a validated question entrypoint without calling Pi", async () => {
   const { runCli } = await import("../src/cli.ts");
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-question-entrypoint-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-question-entrypoint-"));
   const stdout: string[] = [];
   const stderr: string[] = [];
   let compileCalls = 0;
@@ -131,7 +131,7 @@ test("scoped ask delegates to a validated question entrypoint without calling Pi
     const exitCode = await runCli(
       ["ask", "demo", "archive question"],
       {
-        env: { ...process.env, CMDMINT_HOME: root },
+        env: { ...process.env, CLIHOW_HOME: root },
         stdout: (value: string) => stdout.push(value),
         stderr: (value: string) => stderr.push(value),
         interactive: false,
@@ -145,7 +145,7 @@ test("scoped ask delegates to a validated question entrypoint without calling Pi
     assert.equal(exitCode, 0, stderr.join(""));
     assert.equal(stdout.join(""), "Hello, archive question!\n");
     assert.equal(compileCalls, 0);
-    assert.match(stderr.join(""), /Thread: [0-9a-f-]{36}\nContinue: cmdmint ask --thread [0-9a-f-]{36}/);
+    assert.match(stderr.join(""), /Thread: [0-9a-f-]{36}\nContinue: clihow ask --thread [0-9a-f-]{36}/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -153,14 +153,14 @@ test("scoped ask delegates to a validated question entrypoint without calling Pi
 
 test("scoped ask keeps delegated JSON output machine-clean", async () => {
   const { runCli } = await import("../src/cli.ts");
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-question-json-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-question-json-"));
   const stdout: string[] = [];
   const stderr: string[] = [];
   try {
     await saveQuestionPrimitive(root);
     assert.equal(
       await runCli(["ask", "demo", "archive question", "--json"], {
-        env: { ...process.env, CMDMINT_HOME: root },
+        env: { ...process.env, CLIHOW_HOME: root },
         stdout: (value: string) => stdout.push(value),
         stderr: (value: string) => stderr.push(value),
         interactive: true,
@@ -184,14 +184,14 @@ test("scoped ask keeps delegated JSON output machine-clean", async () => {
 test("interactive delegated asks tee the cockpit and persist stdout only", async () => {
   const { runCli } = await import("../src/cli.ts");
   const { listThreads } = await import("../src/threads.ts");
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-question-tee-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-question-tee-"));
   const binaryPath = join(root, "interactive-question.mjs");
   const stdout: string[] = [];
   const stderr: string[] = [];
   try {
     await writeFile(
       binaryPath,
-      "#!/usr/bin/env node\nprocess.stderr.write(`RICH:${process.env.CMDMINT_STREAM_TTY ?? 'missing'}\\n`); process.stdout.write(`FINAL:${process.argv[3]}\\n`);\n",
+      "#!/usr/bin/env node\nprocess.stderr.write(`RICH:${process.env.CLIHOW_STREAM_TTY ?? 'missing'}\\n`); process.stdout.write(`FINAL:${process.argv[3]}\\n`);\n",
       { encoding: "utf8", mode: 0o700 },
     );
     await chmod(binaryPath, 0o700);
@@ -199,7 +199,7 @@ test("interactive delegated asks tee the cockpit and persist stdout only", async
 
     assert.equal(
       await runCli(["ask", "demo", "live question"], {
-        env: { ...process.env, CMDMINT_HOME: root },
+        env: { ...process.env, CLIHOW_HOME: root },
         stdout: (value: string) => stdout.push(value),
         stderr: (value: string) => stderr.push(value),
         interactive: true,
@@ -219,13 +219,13 @@ test("interactive delegated asks tee the cockpit and persist stdout only", async
 test("persists model-backed asks and continues the same UUID with bounded history", async () => {
   const { runCli } = await import("../src/cli.ts");
   const { listThreads } = await import("../src/threads.ts");
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-ask-threads-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-ask-threads-"));
   const stdout: string[] = [];
   const stderr: string[] = [];
   const prompts: string[] = [];
   let answer = "First answer";
   const io = {
-    env: { ...process.env, CMDMINT_HOME: root },
+    env: { ...process.env, CLIHOW_HOME: root },
     cwd: "/work/demo",
     stdout: (value: string) => stdout.push(value),
     stderr: (value: string) => stderr.push(value),
@@ -233,16 +233,16 @@ test("persists model-backed asks and continues the same UUID with bounded histor
       prompts.push(prompt);
       return JSON.stringify({
         answer,
-        sourceIds: ["cmdmint:runtime"],
+        sourceIds: ["clihow:runtime"],
         insufficientEvidence: false,
       });
     },
   };
   try {
-    assert.equal(await runCli(["ask", "cmdmint", "first question", "--json"], io), 0);
+    assert.equal(await runCli(["ask", "clihow", "first question", "--json"], io), 0);
     const first = JSON.parse(stdout.join(""));
     assert.match(first.threadId, /^[0-9a-f-]{36}$/);
-    assert.equal(first.scope, "cmdmint");
+    assert.equal(first.scope, "clihow");
     assert.deepEqual(stderr, []);
     assert.equal((await listThreads(root))[0]?.turns.length, 2);
 
@@ -262,10 +262,10 @@ test("persists model-backed asks and continues the same UUID with bounded histor
     stderr.length = 0;
     answer = "Plain continuation";
     assert.equal(await runCli(["ask", "--thread", first.threadId, "plain follow-up"], io), 0);
-    assert.equal(stdout.join(""), "Plain continuation\nSources: cmdmint:runtime\n");
+    assert.equal(stdout.join(""), "Plain continuation\nSources: clihow:runtime\n");
     assert.match(
       stderr.join(""),
-      new RegExp(`Thread: ${first.threadId}\\nContinue: cmdmint ask --thread ${first.threadId}`),
+      new RegExp(`Thread: ${first.threadId}\\nContinue: clihow ask --thread ${first.threadId}`),
     );
 
     stdout.length = 0;
@@ -282,12 +282,12 @@ test("persists model-backed asks and continues the same UUID with bounded histor
 test("preview, failed asks, and interactive resumes do not publish premature threads", async () => {
   const { runCli } = await import("../src/cli.ts");
   const { listThreads } = await import("../src/threads.ts");
-  const previewRoot = await mkdtemp(join(tmpdir(), "cmdmint-ask-preview-"));
+  const previewRoot = await mkdtemp(join(tmpdir(), "clihow-ask-preview-"));
   const previewStdout: string[] = [];
   try {
     assert.equal(
-      await runCli(["ask", "cmdmint", "preview only", "--show-prompt", "--json"], {
-        env: { ...process.env, CMDMINT_HOME: previewRoot },
+      await runCli(["ask", "clihow", "preview only", "--show-prompt", "--json"], {
+        env: { ...process.env, CLIHOW_HOME: previewRoot },
         stdout: (value: string) => previewStdout.push(value),
         stderr: () => undefined,
       }),
@@ -299,33 +299,33 @@ test("preview, failed asks, and interactive resumes do not publish premature thr
     await rm(previewRoot, { recursive: true, force: true });
   }
 
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-ask-resume-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-ask-resume-"));
   const stdout: string[] = [];
   const stderr: string[] = [];
   let shouldFail = false;
   let readQuestionCalls = 0;
   let answer = "Initial";
   const io = {
-    env: { ...process.env, CMDMINT_HOME: root },
+    env: { ...process.env, CLIHOW_HOME: root },
     stdout: (value: string) => stdout.push(value),
     stderr: (value: string) => stderr.push(value),
     compileAnswer: async () => {
       if (shouldFail) throw new Error("model failure");
       return JSON.stringify({
         answer,
-        sourceIds: ["cmdmint:runtime"],
+        sourceIds: ["clihow:runtime"],
         insufficientEvidence: false,
       });
     },
   };
   try {
-    assert.equal(await runCli(["ask", "cmdmint", "initial", "--json"], io), 0);
+    assert.equal(await runCli(["ask", "clihow", "initial", "--json"], io), 0);
     const threadId = JSON.parse(stdout.join("")).threadId as string;
     const beforeFailure = await listThreads(root);
     stdout.length = 0;
     stderr.length = 0;
     shouldFail = true;
-    assert.equal(await runCli(["ask", "cmdmint", "--thread", threadId, "will fail"], io), 1);
+    assert.equal(await runCli(["ask", "clihow", "--thread", threadId, "will fail"], io), 1);
     assert.equal((await listThreads(root))[0]?.turns.length, beforeFailure[0]?.turns.length);
 
     shouldFail = false;
@@ -354,13 +354,13 @@ test("preview, failed asks, and interactive resumes do not publish premature thr
 
 test("threads inventory is native while interactive and fuzzy browsing use agentconvos argv", async () => {
   const { runCli } = await import("../src/cli.ts");
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-thread-browser-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-thread-browser-"));
   const stdout: string[] = [];
   const stderr: string[] = [];
   const observed: string[][] = [];
   try {
     const result = await runCli(["threads", "--json"], {
-      env: { ...process.env, CMDMINT_HOME: root },
+      env: { ...process.env, CLIHOW_HOME: root },
       stdout: (value: string) => stdout.push(value),
       stderr: (value: string) => stderr.push(value),
     });
@@ -369,7 +369,7 @@ test("threads inventory is native while interactive and fuzzy browsing use agent
 
     assert.equal(
       await runCli(["threads"], {
-        env: { ...process.env, CMDMINT_HOME: root },
+        env: { ...process.env, CLIHOW_HOME: root },
         stdout: (value: string) => stdout.push(value),
         stderr: (value: string) => stderr.push(value),
         browseThreads: async (argv: string[]) => {
@@ -381,7 +381,7 @@ test("threads inventory is native while interactive and fuzzy browsing use agent
     );
     assert.equal(
       await runCli(["threads", "--find", "MCP", "selector"], {
-        env: { ...process.env, CMDMINT_HOME: root },
+        env: { ...process.env, CLIHOW_HOME: root },
         stdout: (value: string) => stdout.push(value),
         stderr: (value: string) => stderr.push(value),
         browseThreads: async (argv: string[]) => {
@@ -392,8 +392,8 @@ test("threads inventory is native while interactive and fuzzy browsing use agent
       0,
     );
     assert.deepEqual(observed, [
-      ["--source", "cmdmint"],
-      ["--source", "cmdmint", "--find", "MCP selector"],
+      ["--source", "clihow"],
+      ["--source", "clihow", "--find", "MCP selector"],
     ]);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -402,7 +402,7 @@ test("threads inventory is native while interactive and fuzzy browsing use agent
 
 test("scoped ask preview shows the delegated argv without executing or calling Pi", async () => {
   const { runCli } = await import("../src/cli.ts");
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-question-preview-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-question-preview-"));
   const stdout: string[] = [];
   const stderr: string[] = [];
   let compileCalls = 0;
@@ -412,7 +412,7 @@ test("scoped ask preview shows the delegated argv without executing or calling P
       await runCli(
         ["ask", "demo", "archive question", "--show-prompt", "--json"],
         {
-          env: { ...process.env, CMDMINT_HOME: root },
+          env: { ...process.env, CLIHOW_HOME: root },
           stdout: (value: string) => stdout.push(value),
           stderr: (value: string) => stderr.push(value),
           compileAnswer: async () => {
@@ -437,9 +437,9 @@ test("scoped ask preview shows the delegated argv without executing or calling P
   }
 });
 
-test("scoped delegated ask rejects cmdmint prompt tracing instead of silently ignoring it", async () => {
+test("scoped delegated ask rejects clihow prompt tracing instead of silently ignoring it", async () => {
   const { runCli } = await import("../src/cli.ts");
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-question-trace-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-question-trace-"));
   const stdout: string[] = [];
   const stderr: string[] = [];
   try {
@@ -448,7 +448,7 @@ test("scoped delegated ask rejects cmdmint prompt tracing instead of silently ig
       await runCli(
         ["ask", "demo", "archive question", "--trace-prompts", join(root, "traces")],
         {
-          env: { ...process.env, CMDMINT_HOME: root },
+          env: { ...process.env, CLIHOW_HOME: root },
           stdout: (value: string) => stdout.push(value),
           stderr: (value: string) => stderr.push(value),
         },
@@ -456,7 +456,7 @@ test("scoped delegated ask rejects cmdmint prompt tracing instead of silently ig
       1,
     );
     assert.equal(stdout.join(""), "");
-    assert.match(stderr.join(""), /does not use a cmdmint model prompt/i);
+    assert.match(stderr.join(""), /does not use a clihow model prompt/i);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -467,14 +467,14 @@ test("learns, registers, discovers, and calls a CLI end to end", async () => {
     new URL("../src/cli.ts", import.meta.url).href
   ).catch(() => undefined);
   assert.equal(typeof cliModule?.runCli, "function");
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-cli-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-cli-"));
   const stdout: string[] = [];
   const stderr: string[] = [];
   const io = {
     env: {
       ...process.env,
-      CMDMINT_HOME: root,
-      CMDMINT_PI_BINARY: piDraftPath,
+      CLIHOW_HOME: root,
+      CLIHOW_PI_BINARY: piDraftPath,
     },
     stdout: (value: string) => stdout.push(value),
     stderr: (value: string) => stderr.push(value),
@@ -510,7 +510,7 @@ test("learns, registers, discovers, and calls a CLI end to end", async () => {
     assert.deepEqual(stderr, []);
 
     stdout.length = 0;
-    io.env.CMDMINT_PI_BINARY = piSelectionPath;
+    io.env.CLIHOW_PI_BINARY = piSelectionPath;
     assert.equal(
       await cliModule!.runCli(
         ["use", "demo", "say hello to Grace", "--dry-run", "--json"],
@@ -533,7 +533,7 @@ test("learns, registers, discovers, and calls a CLI end to end", async () => {
 test("learn --show-prompt prints the rendered prompt without calling Pi or saving", async () => {
   const { runCli } = await import("../src/cli.ts");
   const { listPrimitives } = await import("../src/registry.ts");
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-show-learn-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-show-learn-"));
   const stdout: string[] = [];
   const stderr: string[] = [];
   try {
@@ -542,8 +542,8 @@ test("learn --show-prompt prints the rendered prompt without calling Pi or savin
       {
         env: {
           ...process.env,
-          CMDMINT_HOME: root,
-          CMDMINT_PI_BINARY: join(root, "missing-pi"),
+          CLIHOW_HOME: root,
+          CLIHOW_PI_BINARY: join(root, "missing-pi"),
         },
         stdout: (value: string) => stdout.push(value),
         stderr: (value: string) => stderr.push(value),
@@ -563,23 +563,23 @@ test("learn --show-prompt prints the rendered prompt without calling Pi or savin
 
 test("use --show-prompt prints the rendered prompt without calling Pi or the learned CLI", async () => {
   const { runCli } = await import("../src/cli.ts");
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-show-use-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-show-use-"));
   const stdout: string[] = [];
   const stderr: string[] = [];
   const io = {
     env: {
       ...process.env,
-      CMDMINT_HOME: root,
-      CMDMINT_PI_BINARY: join(root, "missing-pi"),
+      CLIHOW_HOME: root,
+      CLIHOW_PI_BINARY: join(root, "missing-pi"),
     },
     stdout: (value: string) => stdout.push(value),
     stderr: (value: string) => stderr.push(value),
   };
   const executionMarker = join(root, "learned-binary-executed");
-  const previousMarker = process.env.CMDMINT_TEST_EXECUTION_MARKER;
+  const previousMarker = process.env.CLIHOW_TEST_EXECUTION_MARKER;
   try {
     await saveDemoPrimitive(root);
-    process.env.CMDMINT_TEST_EXECUTION_MARKER = executionMarker;
+    process.env.CLIHOW_TEST_EXECUTION_MARKER = executionMarker;
     const { runProcess } = await import("../src/process.ts");
     const control = await runProcess(fixturePath, ["greet", "Control"]);
     assert.equal(control.exitCode, 0);
@@ -600,9 +600,9 @@ test("use --show-prompt prints the rendered prompt without calling Pi or the lea
     });
   } finally {
     if (previousMarker === undefined) {
-      delete process.env.CMDMINT_TEST_EXECUTION_MARKER;
+      delete process.env.CLIHOW_TEST_EXECUTION_MARKER;
     } else {
-      process.env.CMDMINT_TEST_EXECUTION_MARKER = previousMarker;
+      process.env.CLIHOW_TEST_EXECUTION_MARKER = previousMarker;
     }
     await rm(root, { recursive: true, force: true });
   }
@@ -610,14 +610,14 @@ test("use --show-prompt prints the rendered prompt without calling Pi or the lea
 
 test("rejects empty trace directories for every prompt-producing command", async () => {
   const { runCli } = await import("../src/cli.ts");
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-empty-trace-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-empty-trace-"));
   const stdout: string[] = [];
   const stderr: string[] = [];
   const io = {
     env: {
       ...process.env,
-      CMDMINT_HOME: root,
-      CMDMINT_PI_BINARY: join(root, "missing-pi"),
+      CLIHOW_HOME: root,
+      CLIHOW_PI_BINARY: join(root, "missing-pi"),
     },
     stdout: (value: string) => stdout.push(value),
     stderr: (value: string) => stderr.push(value),
@@ -626,7 +626,7 @@ test("rejects empty trace directories for every prompt-producing command", async
     const cases = [
       ["learn", fixturePath, "--name", "demo", "--trace-prompts="],
       ["use", "demo", "say hello", "--trace-prompts="],
-      ["ask", "cmdmint", "where is the registry?", "--trace-prompts="],
+      ["ask", "clihow", "where is the registry?", "--trace-prompts="],
     ];
     for (const args of cases) {
       stdout.length = 0;
@@ -634,7 +634,7 @@ test("rejects empty trace directories for every prompt-producing command", async
       assert.equal(await runCli(args, io), 1);
       assert.equal(
         stderr.join(""),
-        "cmdmint: --trace-prompts requires a non-empty value\n",
+        "clihow: --trace-prompts requires a non-empty value\n",
       );
     }
   } finally {
@@ -644,12 +644,12 @@ test("rejects empty trace directories for every prompt-producing command", async
 
 test("rejects show-prompt with every supplied trace directory spelling", async () => {
   const { runCli } = await import("../src/cli.ts");
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-exclusive-prompt-options-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-exclusive-prompt-options-"));
   const traceDirectory = join(root, "traces");
   const stdout: string[] = [];
   const stderr: string[] = [];
   const io = {
-    env: { ...process.env, CMDMINT_HOME: root },
+    env: { ...process.env, CLIHOW_HOME: root },
     stdout: (value: string) => stdout.push(value),
     stderr: (value: string) => stderr.push(value),
   };
@@ -657,7 +657,7 @@ test("rejects show-prompt with every supplied trace directory spelling", async (
     const commands = [
       ["learn", fixturePath, "--name", "demo"],
       ["use", "demo", "say hello"],
-      ["ask", "cmdmint", "where is the registry?"],
+      ["ask", "clihow", "where is the registry?"],
     ];
     for (const command of commands) {
       for (const traceOption of [
@@ -672,7 +672,7 @@ test("rejects show-prompt with every supplied trace directory spelling", async (
         );
         assert.equal(
           stderr.join(""),
-          "cmdmint: --show-prompt cannot be combined with --trace-prompts\n",
+          "clihow: --show-prompt cannot be combined with --trace-prompts\n",
         );
       }
     }
@@ -683,12 +683,12 @@ test("rejects show-prompt with every supplied trace directory spelling", async (
 
 test("root help describes bounded captured Pi responses", async () => {
   const { runCli } = await import("../src/cli.ts");
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-captured-help-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-captured-help-"));
   const stdout: string[] = [];
   try {
     assert.equal(
       await runCli(["--help"], {
-        env: { ...process.env, CMDMINT_HOME: root },
+        env: { ...process.env, CLIHOW_HOME: root },
         stdout: (value: string) => stdout.push(value),
         stderr: () => undefined,
       }),
@@ -704,15 +704,15 @@ test("root help describes bounded captured Pi responses", async () => {
 
 test("ask --show-prompt emits its exact source packet as JSON without calling Pi", async () => {
   const { runCli } = await import("../src/cli.ts");
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-show-ask-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-show-ask-"));
   const stdout: string[] = [];
   const stderr: string[] = [];
   let compileCalls = 0;
   try {
     const exitCode = await runCli(
-      ["ask", "cmdmint", "where is your registry?", "--show-prompt", "--json"],
+      ["ask", "clihow", "where is your registry?", "--show-prompt", "--json"],
       {
-        env: { ...process.env, CMDMINT_HOME: root },
+        env: { ...process.env, CLIHOW_HOME: root },
         stdout: (value: string) => stdout.push(value),
         stderr: (value: string) => stderr.push(value),
         compileAnswer: async () => {
@@ -724,8 +724,8 @@ test("ask --show-prompt emits its exact source packet as JSON without calling Pi
 
     assert.equal(exitCode, 0, stderr.join(""));
     const value = JSON.parse(stdout.join(""));
-    assert.equal(value.scope, "cmdmint");
-    assert.match(value.prompt, /^Answer a question using only the supplied cmdmint registry sources\./);
+    assert.equal(value.scope, "clihow");
+    assert.match(value.prompt, /^Answer a question using only the supplied clihow registry sources\./);
     assert.match(value.prompt, /"question":"where is your registry\?"/);
     assert.match(value.prompt, new RegExp(root.replaceAll("/", "\\/")));
     assert.equal(compileCalls, 0);
@@ -737,15 +737,15 @@ test("ask --show-prompt emits its exact source packet as JSON without calling Pi
 
 test("--trace-prompts records actual learn, use, and ask model exchanges", async () => {
   const { runCli } = await import("../src/cli.ts");
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-trace-cli-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-trace-cli-"));
   const traceDirectory = join(root, "traces");
   const stdout: string[] = [];
   const stderr: string[] = [];
   const io = {
     env: {
       ...process.env,
-      CMDMINT_HOME: root,
-      CMDMINT_PI_BINARY: piDraftPath,
+      CLIHOW_HOME: root,
+      CLIHOW_PI_BINARY: piDraftPath,
     },
     stdout: (value: string) => stdout.push(value),
     stderr: (value: string) => stderr.push(value),
@@ -769,7 +769,7 @@ test("--trace-prompts records actual learn, use, and ask model exchanges", async
     );
 
     stdout.length = 0;
-    io.env.CMDMINT_PI_BINARY = piSelectionPath;
+    io.env.CLIHOW_PI_BINARY = piSelectionPath;
     assert.equal(
       await runCli(
         [
@@ -788,12 +788,12 @@ test("--trace-prompts records actual learn, use, and ask model exchanges", async
     );
 
     stdout.length = 0;
-    io.env.CMDMINT_PI_BINARY = piAnswerPath;
+    io.env.CLIHOW_PI_BINARY = piAnswerPath;
     assert.equal(
       await runCli(
         [
           "ask",
-          "cmdmint",
+          "clihow",
           "where is your registry?",
           "--trace-prompts",
           traceDirectory,
@@ -828,7 +828,7 @@ test("--trace-prompts records actual learn, use, and ask model exchanges", async
 
 test("learning traces both a rejected candidate and its validation repair", async () => {
   const { runCli } = await import("../src/cli.ts");
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-repair-trace-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-repair-trace-"));
   const traceDirectory = join(root, "traces");
   const stdout: string[] = [];
   const stderr: string[] = [];
@@ -847,8 +847,8 @@ test("learning traces both a rejected candidate and its validation repair", asyn
         {
           env: {
             ...process.env,
-            CMDMINT_HOME: root,
-            CMDMINT_PI_BINARY: piTraceContractPath,
+            CLIHOW_HOME: root,
+            CLIHOW_PI_BINARY: piTraceContractPath,
           },
           stdout: (value: string) => stdout.push(value),
           stderr: (value: string) => stderr.push(value),

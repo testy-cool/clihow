@@ -61,7 +61,7 @@ const contaminatedEvidence: EvidenceBundle = {
     {
       ...evidence.probes[0]!,
       stdout:
-        "Config file: /tmp/cmdmint-learn-r9Hotu/config/demo/config.toml\n",
+        "Config file: /tmp/clihow-learn-r9Hotu/config/demo/config.toml\n",
     },
   ],
 };
@@ -135,7 +135,7 @@ test("reports insufficient evidence explicitly without invoking Pi for an empty 
   assert.deepEqual(result.sources, []);
 });
 
-test("grounds self questions in cmdmint runtime metadata", async () => {
+test("grounds self questions in clihow runtime metadata", async () => {
   const { answerQuestion } = await import("../src/answer.ts");
   let prompt = "";
 
@@ -146,23 +146,23 @@ test("grounds self questions in cmdmint runtime metadata", async () => {
       scope: "all",
       runtime: {
         version: "0.1.0",
-        registryRoot: "/home/test/.local/share/cmdmint",
+        registryRoot: "/home/test/.local/share/clihow",
       },
       compileAnswer: async (value) => {
         prompt = value;
         return JSON.stringify({
-          answer: "cmdmint stores learned data in its registry.",
-          sourceIds: ["cmdmint:runtime"],
+          answer: "clihow stores learned data in its registry.",
+          sourceIds: ["clihow:runtime"],
           insufficientEvidence: false,
         });
       },
     },
   );
 
-  assert.equal(result.sources[0]?.id, "cmdmint:runtime");
+  assert.equal(result.sources[0]?.id, "clihow:runtime");
   assert.equal(result.sources[0]?.kind, "runtime");
-  assert.match(prompt, /\/home\/test\/\.local\/share\/cmdmint/);
-  assert.match(prompt, /first-person words such as "you" and "your" refer to cmdmint/i);
+  assert.match(prompt, /\/home\/test\/\.local\/share\/clihow/);
+  assert.match(prompt, /first-person words such as "you" and "your" refer to clihow/i);
 });
 
 test("redacts legacy learning sandbox paths before Q&A", async () => {
@@ -184,24 +184,24 @@ test("redacts legacy learning sandbox paths before Q&A", async () => {
     },
   );
 
-  assert.doesNotMatch(prompt, /\/tmp\/cmdmint-learn-r9Hotu/);
-  assert.match(prompt, /<cmdmint-learning-home>\/config\/demo\/config\.toml/);
+  assert.doesNotMatch(prompt, /\/tmp\/clihow-learn-r9Hotu/);
+  assert.match(prompt, /<clihow-learning-home>\/config\/demo\/config\.toml/);
 });
 
-test("cmdmint ask answers global self questions from the active registry", async () => {
+test("clihow ask answers global self questions from the active registry", async () => {
   const { runCli } = await import("../src/cli.ts");
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-self-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-self-"));
   try {
     const stdout: string[] = [];
     const stderr: string[] = [];
     const io = {
-      env: { ...process.env, CMDMINT_HOME: root },
+      env: { ...process.env, CLIHOW_HOME: root },
       stdout: (value: string) => stdout.push(value),
       stderr: (value: string) => stderr.push(value),
       compileAnswer: async () =>
         JSON.stringify({
-          answer: `cmdmint stores its registry at ${root}.`,
-          sourceIds: ["cmdmint:runtime"],
+          answer: `clihow stores its registry at ${root}.`,
+          sourceIds: ["clihow:runtime"],
           insufficientEvidence: false,
         }),
     };
@@ -218,50 +218,50 @@ test("cmdmint ask answers global self questions from the active registry", async
         source.id,
         source.kind,
       ]),
-      [["cmdmint:runtime", "runtime"]],
+      [["clihow:runtime", "runtime"]],
     );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
 
-test("cmdmint ask supports an explicit cmdmint self scope", async () => {
+test("clihow ask supports an explicit clihow self scope", async () => {
   const { runCli } = await import("../src/cli.ts");
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-self-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-self-"));
   try {
     const stdout: string[] = [];
     const stderr: string[] = [];
     let prompt = "";
     const io = {
-      env: { ...process.env, CMDMINT_HOME: root },
+      env: { ...process.env, CLIHOW_HOME: root },
       stdout: (value: string) => stdout.push(value),
       stderr: (value: string) => stderr.push(value),
       compileAnswer: async (value: string) => {
         prompt = value;
         return JSON.stringify({
-          answer: `cmdmint stores its registry at ${root}.`,
-          sourceIds: ["cmdmint:runtime"],
+          answer: `clihow stores its registry at ${root}.`,
+          sourceIds: ["clihow:runtime"],
           insufficientEvidence: false,
         });
       },
     };
 
     assert.equal(
-      await runCli(["ask", "cmdmint", "where is your registry?", "--json"], io),
+      await runCli(["ask", "clihow", "where is your registry?", "--json"], io),
       0,
       stderr.join(""),
     );
-    assert.equal(JSON.parse(stdout.join("")).scope, "cmdmint");
+    assert.equal(JSON.parse(stdout.join("")).scope, "clihow");
     assert.doesNotMatch(prompt, /demo:manifest/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
 
-test("cmdmint ask supports global and primitive scopes without executing learned binaries", async () => {
+test("clihow ask supports global and primitive scopes without executing learned binaries", async () => {
   const { runCli } = await import("../src/cli.ts");
   const { savePrimitive } = await import("../src/registry.ts");
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-ask-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-ask-"));
   try {
     await savePrimitive(root, manifest, evidence);
     const stdout: string[] = [];
@@ -270,7 +270,7 @@ test("cmdmint ask supports global and primitive scopes without executing learned
     const io = {
       env: {
         ...process.env,
-        CMDMINT_HOME: root,
+        CLIHOW_HOME: root,
       },
       stdout: (value: string) => stdout.push(value),
       stderr: (value: string) => stderr.push(value),
@@ -298,7 +298,7 @@ test("cmdmint ask supports global and primitive scopes without executing learned
     assert.equal(await runCli(["ask", "demo", "How do I greet?"], io), 0);
     assert.match(stdout.join(""), /^Use demo\.greet\.\nSources: demo:evidence:sub:greet\n$/);
     assert.match(prompts.at(-1) ?? "", /"scope":"demo"/);
-    assert.match(stderr.join(""), /Thread: [0-9a-f-]{36}\nContinue: cmdmint ask --thread [0-9a-f-]{36}/);
+    assert.match(stderr.join(""), /Thread: [0-9a-f-]{36}\nContinue: clihow ask --thread [0-9a-f-]{36}/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -24,7 +24,7 @@ const SECOND_ID = "019f0000-0000-7000-8000-000000000002";
 
 function metadata(id: string, updatedAt: string): string {
   return JSON.stringify({
-    type: "cmdmint_thread",
+    type: "clihow_thread",
     schemaVersion: 1,
     id,
     title: "Find it",
@@ -54,7 +54,7 @@ async function writeThreadFixture(root: string, id: string): Promise<void> {
 }
 
 test("stores and resolves a completed thread by UUID prefix", async () => {
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-threads-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-threads-"));
   try {
     const thread = await createThread(root, {
       scope: "agentconvos",
@@ -75,7 +75,7 @@ test("stores and resolves a completed thread by UUID prefix", async () => {
     );
     assert.match(
       await readFile(join(root, "threads", `${thread.id}.jsonl`), "utf8"),
-      /cmdmint_thread/,
+      /clihow_thread/,
     );
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -127,7 +127,7 @@ test("keeps follow-up safety and assistant labels when long context is bounded",
   );
 
   assert.ok(rendered.length <= 900);
-  assert.match(rendered, /Durable cmdmint thread navigation context, not authoritative evidence/i);
+  assert.match(rendered, /Durable clihow thread navigation context, not authoritative evidence/i);
   assert.match(rendered, /Current follow-up:\nWhat changed in the implementation\?/);
 
   const assistantOffset = rendered.indexOf("UNSAFE_ASSISTANT_SENTINEL");
@@ -140,7 +140,7 @@ test("keeps follow-up safety and assistant labels when long context is bounded",
 });
 
 test("rejects a second writer while a thread lock is held", async () => {
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-thread-lock-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-thread-lock-"));
   try {
     const thread = await createThread(root, {
       scope: "agentconvos",
@@ -159,7 +159,7 @@ test("rejects a second writer while a thread lock is held", async () => {
 });
 
 test("rejects ambiguous and invalid thread prefixes", async () => {
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-thread-prefix-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-thread-prefix-"));
   try {
     await writeFile(join(root, "threads"), "not a directory", { encoding: "utf8" }).catch(
       () => undefined,
@@ -178,7 +178,7 @@ test("rejects ambiguous and invalid thread prefixes", async () => {
 });
 
 test("rejects missing and malformed thread files", async () => {
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-thread-errors-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-thread-errors-"));
   try {
     await assert.rejects(loadThread(root, FIRST_ID), /not found|missing/i);
 
@@ -196,7 +196,7 @@ test("rejects missing and malformed thread files", async () => {
 });
 
 test("truncates long titles and creates private storage directories", async () => {
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-thread-permissions-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-thread-permissions-"));
   try {
     const question = `${"A very long question ".repeat(20)}end`;
     const thread = await createThread(root, {
@@ -221,7 +221,7 @@ test("truncates long titles and creates private storage directories", async () =
 });
 
 test("preserves invocation and source metadata on recorded turns", async () => {
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-thread-metadata-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-thread-metadata-"));
   try {
     const thread = await createThread(root, {
       scope: "demo",

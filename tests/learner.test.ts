@@ -102,9 +102,9 @@ test("redacts the isolated learning directory from stored evidence", async () =>
   const stdout = result.evidence.probes[0]?.stdout ?? "";
   assert.match(
     stdout,
-    /<cmdmint-learning-home>\/config\/environment-help-cli\/config\.toml/,
+    /<clihow-learning-home>\/config\/environment-help-cli\/config\.toml/,
   );
-  assert.doesNotMatch(stdout, /cmdmint-learn-/);
+  assert.doesNotMatch(stdout, /clihow-learn-/);
 });
 
 test("uses the locked Pi runtime when no compiler is injected", async () => {

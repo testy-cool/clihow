@@ -70,7 +70,7 @@ function ioFor(root: string) {
   const stderr: string[] = [];
   return {
     io: {
-      env: { ...process.env, CMDMINT_HOME: root },
+      env: { ...process.env, CLIHOW_HOME: root },
       stdout: (value: string) => stdout.push(value),
       stderr: (value: string) => stderr.push(value),
     },
@@ -82,7 +82,7 @@ function ioFor(root: string) {
 test("root help describes live learned primitives and handles an empty registry", async () => {
   const { runCli } = await import("../src/cli.ts");
   const { savePrimitive } = await import("../src/registry.ts");
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-help-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-help-"));
   try {
     const output = ioFor(root);
     assert.equal(await runCli(["--help"], output.io), 0);
@@ -94,7 +94,7 @@ test("root help describes live learned primitives and handles an empty registry"
     const help = output.stdout.join("");
     assert.match(help, /Learned primitives:\n\s+demo\s+1 method\b/);
     assert.match(help, /Scoped ask delegates to validated read-only question entrypoints/);
-    assert.match(help, /cmdmint threads(?: --json)?/);
+    assert.match(help, /clihow threads(?: --json)?/);
     assert.match(help, /--thread <id>/);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -103,7 +103,7 @@ test("root help describes live learned primitives and handles an empty registry"
 
 test("root help stays usable when registry manifests cannot be read", async () => {
   const { runCli } = await import("../src/cli.ts");
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-help-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-help-"));
   try {
     const directory = join(root, "primitives", "broken");
     await mkdir(directory, { recursive: true });
@@ -122,7 +122,7 @@ test("root help stays usable when registry manifests cannot be read", async () =
 test("primitive help has readable and JSON forms", async () => {
   const { runCli } = await import("../src/cli.ts");
   const { savePrimitive } = await import("../src/registry.ts");
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-help-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-help-"));
   try {
     await savePrimitive(root, manifest, evidence);
     const output = ioFor(root);
@@ -132,8 +132,8 @@ test("primitive help has readable and JSON forms", async () => {
     assert.match(text, /demo - Demonstrate a small learned CLI\./);
     assert.match(text, /greet\s+\[read, text\]\s+Greet one person\./);
     assert.match(text, /name\s+string\s+required\s+Person to greet\./);
-    assert.match(text, /cmdmint call demo\.greet/);
-    assert.match(text, /Question entrypoint:\s+cmdmint ask demo <question>/);
+    assert.match(text, /clihow call demo\.greet/);
+    assert.match(text, /Question entrypoint:\s+clihow ask demo <question>/);
 
     output.stdout.length = 0;
     assert.equal(await runCli(["help", "demo", "--json"], output.io), 0);

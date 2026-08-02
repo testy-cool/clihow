@@ -14,7 +14,7 @@ test("checks Pi, Luna, and the local primitive registry", async () => {
     new URL("../src/doctor.ts", import.meta.url).href
   ).catch(() => undefined);
   assert.equal(typeof doctorModule?.runDoctor, "function");
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-doctor-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-doctor-"));
   try {
     const report = await doctorModule!.runDoctor({
       piBinary: piDoctorPath,

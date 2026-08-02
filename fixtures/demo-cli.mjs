@@ -59,8 +59,8 @@ if (command in helpByCommand && args.slice(1).some((arg) => arg === "--help" || 
 }
 
 if (command === "greet") {
-  if (process.env.CMDMINT_TEST_EXECUTION_MARKER) {
-    writeFileSync(process.env.CMDMINT_TEST_EXECUTION_MARKER, "greet\n", {
+  if (process.env.CLIHOW_TEST_EXECUTION_MARKER) {
+    writeFileSync(process.env.CLIHOW_TEST_EXECUTION_MARKER, "greet\n", {
       mode: 0o600,
     });
   }

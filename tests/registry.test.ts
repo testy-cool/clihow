@@ -35,7 +35,7 @@ const evidence: EvidenceBundle = {
 };
 
 test("stores and reloads a primitive with its evidence", async () => {
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-registry-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-registry-"));
   try {
     const registryModule = await import(
       new URL("../src/registry.ts", import.meta.url).href
@@ -55,7 +55,7 @@ test("stores and reloads a primitive with its evidence", async () => {
 });
 
 test("lists primitive manifests in stable name order", async () => {
-  const root = await mkdtemp(join(tmpdir(), "cmdmint-registry-"));
+  const root = await mkdtemp(join(tmpdir(), "clihow-registry-"));
   try {
     const { listPrimitives, savePrimitive } = await import("../src/registry.ts");
     await savePrimitive(root, manifest, evidence);

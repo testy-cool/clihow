@@ -1,10 +1,10 @@
 {
-  "name": "cmdmint",
+  "name": "clihow",
   "version": "0.1.0",
-  "description": "Mint installed CLIs into tested, agent-discoverable primitives.",
+  "description": "Learn installed CLIs into tested, agent-discoverable primitives.",
   "type": "module",
   "bin": {
-    "cmdmint": "./dist/cli.js"
+    "clihow": "./dist/cli.js"
   },
   "files": [
     "dist",

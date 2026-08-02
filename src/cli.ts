@@ -127,7 +127,7 @@ async function readFollowUpQuestion(io: CliIo): Promise<string> {
 }
 
 function writeThreadHint(io: CliIo, threadId: string): void {
-  io.stderr(`Thread: ${threadId}\nContinue: cmdmint ask --thread ${threadId} "follow-up"\n`);
+  io.stderr(`Thread: ${threadId}\nContinue: clihow ask --thread ${threadId} "follow-up"\n`);
 }
 
 function writeJson(io: CliIo, value: unknown): void {
@@ -199,21 +199,21 @@ function rootHelp(primitives?: PrimitiveManifest[]): string {
                 `  ${primitive.name}\t${String(primitive.methods.length)} ${primitive.methods.length === 1 ? "method" : "methods"}`,
             )
             .join("\n");
-  return `cmdmint ${VERSION} - mint installed CLIs into tested primitives
+  return `clihow ${VERSION} - learn installed CLIs as tested primitives
 
 Usage:
-  cmdmint help <primitive> [--json]
-  cmdmint learn <binary> [--name <name>] [--show-prompt] [--trace-prompts <directory>] [--json]
-  cmdmint list [--json]
-  cmdmint describe <primitive>[.<method>] [--json]
-  cmdmint test <primitive> [--json]
-  cmdmint call <primitive>.<method> [--args-json <json>] [--dry-run] [--yes] [--json]
-  cmdmint use <primitive> <intent> [--show-prompt] [--trace-prompts <directory>] [--dry-run] [--yes] [--json]
-  cmdmint ask [--thread <id>] <question> [--show-prompt] [--trace-prompts <directory>] [--json]
-  cmdmint ask [--thread <id>] <primitive> <question> [--show-prompt] [--trace-prompts <directory>] [--json]
-  cmdmint threads [--json]
-  cmdmint threads --find <query...>
-  cmdmint doctor [--json]
+  clihow help <primitive> [--json]
+  clihow learn <binary> [--name <name>] [--show-prompt] [--trace-prompts <directory>] [--json]
+  clihow list [--json]
+  clihow describe <primitive>[.<method>] [--json]
+  clihow test <primitive> [--json]
+  clihow call <primitive>.<method> [--args-json <json>] [--dry-run] [--yes] [--json]
+  clihow use <primitive> <intent> [--show-prompt] [--trace-prompts <directory>] [--dry-run] [--yes] [--json]
+  clihow ask [--thread <id>] <question> [--show-prompt] [--trace-prompts <directory>] [--json]
+  clihow ask [--thread <id>] <primitive> <question> [--show-prompt] [--trace-prompts <directory>] [--json]
+  clihow threads [--json]
+  clihow threads --find <query...>
+  clihow doctor [--json]
 
 Learned primitives:
 ${learned}
@@ -231,8 +231,8 @@ Prompt inspection:
                          Stdout and stderr can be truncated at 1 MiB; the trace truncated field records it.
 
 Environment:
-  CMDMINT_HOME       Registry directory (default: ~/.local/share/cmdmint)
-  CMDMINT_PI_BINARY  Pi executable override for testing or custom installs
+  CLIHOW_HOME       Registry directory (default: ~/.local/share/clihow)
+  CLIHOW_PI_BINARY  Pi executable override for testing or custom installs
 `;
 }
 
@@ -255,7 +255,7 @@ function primitiveHelpValue(manifest: PrimitiveManifest) {
       output: method.output,
       parameters: method.parameters,
       evidenceId: method.evidenceId,
-      call: `cmdmint call ${manifest.name}.${method.name}`,
+      call: `clihow call ${manifest.name}.${method.name}`,
     })),
   };
 }
@@ -267,7 +267,7 @@ function primitiveHelp(manifest: PrimitiveManifest): string {
   ];
   if (manifest.ask) {
     lines.push(
-      `Question entrypoint: cmdmint ask ${manifest.name} <question>`,
+      `Question entrypoint: clihow ask ${manifest.name} <question>`,
       `  delegates to ${manifest.name}.${manifest.ask.method}`,
     );
   }
@@ -283,7 +283,7 @@ function primitiveHelp(manifest: PrimitiveManifest): string {
         `    ${label}  ${parameter.type}  ${parameter.required ? "required" : "optional"}  ${parameter.description}`,
       );
     }
-    lines.push(`    cmdmint call ${manifest.name}.${method.name} --args-json '<json>'`);
+    lines.push(`    clihow call ${manifest.name}.${method.name} --args-json '<json>'`);
   }
   if (manifest.methods.length === 0) lines.push("  No methods learned.");
   return `${lines.join("\n")}\n`;
@@ -319,13 +319,13 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
     return 0;
   }
 
-  const piBinary = io.env.CMDMINT_PI_BINARY;
+  const piBinary = io.env.CLIHOW_PI_BINARY;
 
   if (command === "help") {
     const parsed = parseArguments(rest, [], ["--json"]);
     const name = parsed.positionals[0];
     if (!name) {
-      if (parsed.positionals.length) throw new Error("Usage: cmdmint help <primitive> [--json]");
+      if (parsed.positionals.length) throw new Error("Usage: clihow help <primitive> [--json]");
       let primitives: PrimitiveManifest[] | undefined;
       try {
         primitives = await listPrimitives(root);
@@ -336,7 +336,7 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
       return 0;
     }
     if (parsed.positionals.length !== 1) {
-      throw new Error("Usage: cmdmint help <primitive> [--json]");
+      throw new Error("Usage: clihow help <primitive> [--json]");
     }
     const manifest = await loadPrimitive(root, name);
     if (optionBoolean(parsed, "--json")) writeJson(io, primitiveHelpValue(manifest));
@@ -354,7 +354,7 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
     const binary = parsed.positionals[0];
     if (!binary || parsed.positionals.length !== 1) {
       throw new Error(
-        "Usage: cmdmint learn <binary> [--name <name>] [--show-prompt] [--trace-prompts <directory>] [--json]",
+        "Usage: clihow learn <binary> [--name <name>] [--show-prompt] [--trace-prompts <directory>] [--json]",
       );
     }
     const maxSubcommandsValue = optionString(parsed, "--max-subcommands");
@@ -399,7 +399,7 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
       writeJson(io, { ...result, verification });
     } else {
       io.stdout(
-        `Minted ${result.manifest.name}: ${String(result.manifest.methods.length)} methods, ${String(verification.methods.length)} probes passed\n`,
+        `Learned ${result.manifest.name}: ${String(result.manifest.methods.length)} methods, ${String(verification.methods.length)} probes passed\n`,
       );
     }
     return 0;
@@ -407,7 +407,7 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
 
   if (command === "list") {
     const parsed = parseArguments(rest, [], ["--json"]);
-    if (parsed.positionals.length) throw new Error("Usage: cmdmint list [--json]");
+    if (parsed.positionals.length) throw new Error("Usage: clihow list [--json]");
     const manifests = await listPrimitives(root);
     const summaries = manifests.map((manifest) => ({
       name: manifest.name,
@@ -430,7 +430,7 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
     const parsed = parseArguments(rest, ["--find"], ["--json"]);
     if (optionBoolean(parsed, "--json")) {
       if (hasOption(parsed, "--find") || parsed.positionals.length) {
-        throw new Error("Usage: cmdmint threads [--json]");
+        throw new Error("Usage: clihow threads [--json]");
       }
       writeJson(io, await listThreads(root));
       return 0;
@@ -443,9 +443,9 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
       throw new Error("--find requires a non-empty query");
     }
     if (!hasOption(parsed, "--find") && parsed.positionals.length) {
-      throw new Error("Usage: cmdmint threads [--json] or cmdmint threads --find <query...>");
+      throw new Error("Usage: clihow threads [--json] or clihow threads --find <query...>");
     }
-    const argv = ["--source", "cmdmint"];
+    const argv = ["--source", "clihow"];
     if (query) argv.push("--find", query);
     return await (io.browseThreads ?? browseThreadPicker)(argv);
   }
@@ -454,7 +454,7 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
     const parsed = parseArguments(rest, [], ["--json"]);
     const targetValue = parsed.positionals[0];
     if (!targetValue || parsed.positionals.length !== 1) {
-      throw new Error("Usage: cmdmint describe <primitive>[.<method>] [--json]");
+      throw new Error("Usage: clihow describe <primitive>[.<method>] [--json]");
     }
     const target = parseTarget(targetValue);
     const manifest = await loadPrimitive(root, target.primitive);
@@ -470,7 +470,7 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
     const parsed = parseArguments(rest, [], ["--json"]);
     const name = parsed.positionals[0];
     if (!name || parsed.positionals.length !== 1) {
-      throw new Error("Usage: cmdmint test <primitive> [--json]");
+      throw new Error("Usage: clihow test <primitive> [--json]");
     }
     const report = await testPrimitive(await loadPrimitive(root, name));
     if (optionBoolean(parsed, "--json")) writeJson(io, report);
@@ -486,7 +486,7 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
     const parsed = parseArguments(rest, ["--args-json"], ["--dry-run", "--yes", "--json"]);
     const targetValue = parsed.positionals[0];
     if (!targetValue || parsed.positionals.length !== 1) {
-      throw new Error("Usage: cmdmint call <primitive>.<method> [--args-json <json>]");
+      throw new Error("Usage: clihow call <primitive>.<method> [--args-json <json>]");
     }
     const target = parseTarget(targetValue);
     if (!target.method) throw new Error("call requires <primitive>.<method>");
@@ -519,7 +519,7 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
     const intent = parsed.positionals.slice(1).join(" ");
     if (!name || !intent) {
       throw new Error(
-        "Usage: cmdmint use <primitive> <intent> [--show-prompt] [--trace-prompts <directory>] [--dry-run] [--yes] [--json]",
+        "Usage: clihow use <primitive> <intent> [--show-prompt] [--trace-prompts <directory>] [--dry-run] [--yes] [--json]",
       );
     }
     const manifest = await loadPrimitive(root, name);
@@ -571,7 +571,7 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
     const threadOption = optionString(parsed, "--thread");
     if (parsed.positionals.length === 0 && !threadOption) {
       throw new Error(
-        "Usage: cmdmint ask [--thread <id>] [<primitive>] <question> [--show-prompt] [--trace-prompts <directory>] [--json]",
+        "Usage: clihow ask [--thread <id>] [<primitive>] <question> [--show-prompt] [--trace-prompts <directory>] [--json]",
       );
     }
     const preview = optionBoolean(parsed, "--show-prompt");
@@ -600,7 +600,7 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
         }
         scope = thread.scope;
         question = questionPositionals.join(" ");
-        if (scope !== "all" && scope !== "cmdmint") {
+        if (scope !== "all" && scope !== "clihow") {
           requestedScope = manifests.find((manifest) => manifest.name === scope);
           if (!requestedScope) {
             throw new Error(`Stored thread scope is no longer learned: ${scope}`);
@@ -608,12 +608,12 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
         }
       } else {
         const requestedSelfScope =
-          parsed.positionals.length > 1 && parsed.positionals[0] === "cmdmint";
+          parsed.positionals.length > 1 && parsed.positionals[0] === "clihow";
         requestedScope =
           parsed.positionals.length > 1 && !requestedSelfScope
             ? manifests.find((manifest) => manifest.name === parsed.positionals[0])
             : undefined;
-        scope = requestedSelfScope ? "cmdmint" : requestedScope?.name ?? "all";
+        scope = requestedSelfScope ? "clihow" : requestedScope?.name ?? "all";
         question = requestedSelfScope || requestedScope
           ? parsed.positionals.slice(1).join(" ")
           : parsed.positionals.join(" ");
@@ -622,7 +622,7 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
       if (!question.trim()) {
         if (!thread || !io.interactive) {
           throw new Error(
-            "Usage: cmdmint ask [--thread <id>] [<primitive>] <question> [--show-prompt] [--trace-prompts <directory>] [--json]",
+            "Usage: clihow ask [--thread <id>] [<primitive>] <question> [--show-prompt] [--trace-prompts <directory>] [--json]",
           );
         }
         question = await readFollowUpQuestion(io);
@@ -655,7 +655,7 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
         }
         if (optionString(parsed, "--trace-prompts")) {
           throw new Error(
-            `Scoped ask for ${requestedScope.name} delegates directly and does not use a cmdmint model prompt`,
+            `Scoped ask for ${requestedScope.name} delegates directly and does not use a clihow model prompt`,
           );
         }
         const interactiveDelegate = Boolean(
@@ -671,7 +671,7 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
             dryRun: preview,
             stdio: interactiveDelegate ? "tee" : "capture",
             env: interactiveDelegate
-              ? { ...io.env, CMDMINT_STREAM_TTY: "1" }
+              ? { ...io.env, CLIHOW_STREAM_TTY: "1" }
               : io.env,
             ...(interactiveDelegate
               ? { onStdout: io.stdout, onStderr: io.stderr }
@@ -689,7 +689,7 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
           };
           if (optionBoolean(parsed, "--json")) writeJson(io, previewValue);
           else {
-            io.stdout("No cmdmint model prompt; this question delegates directly.\n");
+            io.stdout("No clihow model prompt; this question delegates directly.\n");
             writeJson(io, previewValue);
           }
           return 0;
@@ -749,7 +749,7 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
         return invocation.exitCode ?? (invocation.executed ? 1 : 0);
       }
 
-      const selectedManifests = scope === "cmdmint"
+      const selectedManifests = scope === "clihow"
         ? []
         : requestedScope
           ? [requestedScope]
@@ -823,7 +823,7 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
 
   if (command === "doctor") {
     const parsed = parseArguments(rest, [], ["--json"]);
-    if (parsed.positionals.length) throw new Error("Usage: cmdmint doctor [--json]");
+    if (parsed.positionals.length) throw new Error("Usage: clihow doctor [--json]");
     const report = await runDoctor({
       registryRoot: root,
       ...(piBinary ? { piBinary } : {}),
@@ -837,14 +837,14 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
     return report.ok ? 0 : 1;
   }
 
-  throw new Error(`Unknown command: ${command}. Run cmdmint --help.`);
+  throw new Error(`Unknown command: ${command}. Run clihow --help.`);
 }
 
 export async function runCli(args: string[], io: CliIo = defaultIo): Promise<number> {
   try {
     return await dispatch(args, io);
   } catch (error) {
-    io.stderr(`cmdmint: ${(error as Error).message}\n`);
+    io.stderr(`clihow: ${(error as Error).message}\n`);
     return 1;
   }
 }

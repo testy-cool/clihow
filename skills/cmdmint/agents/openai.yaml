@@ -1,4 +1,0 @@
-interface:
-  display_name: "Cmdmint"
-  short_description: "Compile installed CLIs into safe primitives"
-  default_prompt: "Use $cmdmint to learn this CLI and expose a safe, discoverable primitive."

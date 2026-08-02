@@ -14,7 +14,7 @@ test("exports a bounded process runner", async () => {
 
 test("runs argv directly and captures separate output streams", async () => {
   const { runProcess } = await import("../src/process.ts");
-  const literal = "$(touch /tmp/cmdmint-must-not-run);hello";
+  const literal = "$(touch /tmp/clihow-must-not-run);hello";
 
   const result = await runProcess(process.execPath, [
     "-e",
@@ -60,17 +60,17 @@ test("truncates captured output at the configured byte limit", async () => {
 
 test("runs inside the supplied directory and environment", async () => {
   const { runProcess } = await import("../src/process.ts");
-  const cwd = await mkdtemp(join(tmpdir(), "cmdmint-process-"));
+  const cwd = await mkdtemp(join(tmpdir(), "clihow-process-"));
   try {
     const result = await runProcess(
       process.execPath,
       [
         "-e",
-        "process.stdout.write(JSON.stringify({cwd: process.cwd(), value: process.env.CMDMINT_TEST_VALUE}))",
+        "process.stdout.write(JSON.stringify({cwd: process.cwd(), value: process.env.CLIHOW_TEST_VALUE}))",
       ],
       {
         cwd,
-        env: { PATH: process.env.PATH ?? "", CMDMINT_TEST_VALUE: "isolated" },
+        env: { PATH: process.env.PATH ?? "", CLIHOW_TEST_VALUE: "isolated" },
       },
     );
 

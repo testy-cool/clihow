@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://cmdmint.local/schema/primitive-manifest.schema.json",
-  "title": "Cmdmint primitive manifest",
+  "$id": "https://clihow.local/schema/primitive-manifest.schema.json",
+  "title": "Clihow primitive manifest",
   "type": "object",
   "additionalProperties": false,
   "required": [
