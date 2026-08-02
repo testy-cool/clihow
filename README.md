@@ -1,146 +1,167 @@
-# clihow
+<div align="center">
 
-Learn an installed CLI as a tested, agent-discoverable primitive.
+# clihow 🧭
 
-```bash
-clihow learn gh
-clihow help gh
-clihow ask gh "How do I list repositories?" --json
-clihow call gh.repo_list --args-json '{"limit":10}' --dry-run --json
-```
+**Learn a CLI once. Let every agent use it.**
 
-`clihow` inspects bounded help/version output, asks Pi to compile a small method manifest, validates every command and option against the captured evidence, and stores the result locally. Calls later execute the original binary directly with an argv array—never through a shell.
+Turn installed commands into tested methods that you, Codex, Claude, Pi, and other agents can discover and call.
 
-## Why this exists
+[![Node.js 22+](https://img.shields.io/badge/Node.js-22%2B-5FA04E?style=flat-square)](package.json)
+[![MIT license](https://img.shields.io/badge/license-MIT-a6e3a1?style=flat-square)](LICENSE)
+[![Status: early preview](https://img.shields.io/badge/status-early_preview-f9e2af?style=flat-square)](#current-status)
 
-Agents should not have to rediscover a CLI, remember its provider/model setup, or improvise command strings on every run. A learned primitive gives them one stable surface:
+</div>
+
+<p align="center">
+  <img src="docs/assets/clihow-terminal.svg" alt="clihow learning, calling, and testing the included demo CLI" width="720">
+</p>
+
+`clihow` reads a command's own help, turns it into a small local method manifest, and tests each method before saving it. You and your agents can inspect that manifest, choose a method from plain language, preview the exact arguments, or call the method directly. Before a call, `clihow` checks the binary and the arguments. It then runs the original command without a shell.
 
 ```text
-installed CLI -> bounded evidence -> compiled manifest -> validated argv -> exact CLI
-                                      ^          ^
-                                      |          +-- delegate scoped questions when declared
-                                      +-- discover and ask over stored evidence
+installed CLI -> captured help -> tested manifest -> validated argv -> installed CLI
 ```
 
-The model is used only for compilation, natural-language method selection, and grounded answers over stored registry evidence. A scoped ask can instead delegate to a learned CLI when its manifest explicitly declares a validated read-only question entrypoint. Probing, validation, storage, drift detection, approval gates, testing, and execution are deterministic.
+## Why
 
-## Install locally
+- **Stop teaching syntax every session.** Learn a CLI once and reuse the same methods from Codex, Claude, Pi, another agent, or your own terminal.
+- **Inspect before you act.** Every method has typed arguments, a risk level, source evidence, and a harmless verification probe.
+- **Keep execution predictable.** `clihow` checks the binary fingerprint, validates every argument, and invokes the binary without a shell.
+- **See what the model sees.** Print the next prompt without sending it, or save the prompts and responses from a run.
+- **Continue questions from another terminal.** Successful asks become private threads with explicit IDs and searchable history.
 
-Requirements:
+## Install
+
+`clihow` is currently installed from source. You need:
 
 - Node.js 22 or newer
 - pnpm
-- Pi available as `pi`
+- [Pi](https://github.com/earendil-works/pi) available as `pi`
 - Pi access to `openai-codex/gpt-5.6-luna`
 
 ```bash
+git clone https://github.com/testy-cool/clihow.git
+cd clihow
 pnpm install
 pnpm build
 pnpm link --global
 clihow doctor
 ```
 
-## Commands
+`clihow doctor` checks Pi, the locked model configuration, and the local registry before you learn anything.
 
-### Learn a CLI
+## Quick start
+
+The repository includes a harmless demo CLI, so you can run the complete loop without giving `clihow` access to another tool.
 
 ```bash
-clihow learn <binary> [--name <name>] [--max-subcommands <count>] [--show-prompt] [--trace-prompts <directory>] [--json]
+# Read its help, compile three methods, and run all three help probes.
+clihow learn ./fixtures/demo-cli.mjs --name demo
+
+# Read the compact guide that agents discover.
+clihow help demo
+
+# Let Luna bind plain language, but stop before execution.
+clihow use demo "greet Ada loudly" --dry-run --json
+
+# Call the validated method directly.
+clihow call demo.greet --args-json '{"name":"Ada","loud":true}'
+
+# Recheck the binary and every stored probe.
+clihow test demo
 ```
 
-Learning performs only version and help probes in a temporary working directory, with a temporary HOME and a small secret-free environment. Pi runs `openai-codex/gpt-5.6-luna` at High thinking with tools, sessions, extensions, skills, prompt templates, and ambient context disabled.
+The learn, call, and test steps produce:
 
-The manifest is saved only after its help probes pass.
-
-If the first candidate fails deterministic validation, `clihow` gives Pi the exact validator error and allows one correction pass. It never relaxes the validator or executes the rejected candidate.
-
-### Discover methods
-
-```bash
-clihow --help
-clihow help <primitive>
-clihow help <primitive> --json
-clihow list --json
-clihow describe <primitive> --json
-clihow describe <primitive>.<method> --json
+```text
+Learned demo: 3 methods, 3 probes passed
+HELLO, ADA!
+PASS demo: 3/3 probes
 ```
 
-Root help includes a live summary of every learned primitive. `help <primitive>` is the readable method guide; its JSON form is a compact agent-facing overview. `describe` remains the exact stored contract, including parameters, types, defaults, risk, output kind, evidence provenance, and the non-mutating verification probe.
-
-### Ask for evidence or delegate a question
+Learn a tool you already use in the same way:
 
 ```bash
+clihow learn gh
+clihow help gh
+clihow use gh "list the ten newest repositories" --dry-run --json
+```
+
+## What you get
+
+| Command | What it does | Does it run the learned CLI? |
+|---|---|---|
+| `clihow learn <binary>` | Captures help, compiles a manifest, validates it, and runs help probes | Yes, for bounded version and help probes |
+| `clihow help <name>` | Shows a compact guide for one learned CLI | No |
+| `clihow list --json` | Lists every learned primitive | No |
+| `clihow describe <name>[.<method>] --json` | Returns the exact stored contract | No |
+| `clihow use <name> <intent>` | Selects a method from plain language and binds its arguments | Yes, unless you add `--dry-run` |
+| `clihow call <name>.<method>` | Calls one known method with validated JSON arguments | Yes, unless you add `--dry-run` |
+| `clihow ask [<name>] <question>` | Answers from stored evidence or uses a declared read-only question method | Only when that validated question method exists |
+| `clihow test <name>` | Rechecks the fingerprint and stored help probes | Yes, for the stored help probes |
+| `clihow threads` | Browses completed asks through agentconvos | It runs agentconvos, not a learned method |
+| `clihow doctor` | Checks Pi, Luna, and registry access | No |
+
+Use `help` when a person or agent needs a readable guide. Use `describe` and `call` when the caller already knows the exact contract. Use `use` when choosing and binding the method is the hard part.
+
+## How learning works
+
+1. `clihow` resolves the executable and records its path, version, size, modification time, and SHA-256 fingerprint.
+2. It runs bounded version and help probes inside temporary HOME and XDG directories.
+3. Pi runs Luna with High thinking to turn the captured help into a small method manifest. Tools, sessions, skills, extensions, and ambient agent context are disabled.
+4. A deterministic validator rejects commands, options, parameters, evidence references, or probes that the captured help does not support.
+5. `clihow` runs each non-mutating help probe and saves the primitive only when all probes pass.
+6. Before a later call, `clihow` checks the fingerprint again and builds the exact argument array from the stored contract.
+
+If the first manifest fails validation, Luna gets the exact validator error and one chance to repair it. `clihow` never relaxes the validator or executes the rejected manifest.
+
+## Ask what a CLI knows
+
+`ask` is the agentic RAG layer over the active registry and captured help. Luna receives that packet as its only task context, and every sufficient answer must cite source IDs from the packet.
+
+```bash
+# Search every learned CLI and clihow's own runtime metadata.
 clihow ask "Which learned CLI can manage agent sessions?"
+
+# Ask only about clihow.
 clihow ask clihow "Where do you keep your data?" --json
+
+# Ask one learned CLI.
 clihow ask herdr "Which operations change state?" --json
-clihow ask agentconvos "Where did we decide how scraper fallbacks work?"
 ```
 
-The first form searches all learned primitives plus clihow's active runtime metadata. In an unscoped question, words such as “you” and “your” refer to clihow itself. Use the explicit `clihow` scope for self-only questions, or supply a learned primitive name to scope the question to that CLI. Pi receives only the active registry metadata, stored manifests, and captured help evidence, with tools and ambient context disabled. Every sufficient answer must return source IDs that `clihow` validates against the supplied source packet; unsupported questions return an explicit `insufficientEvidence` result.
+Each sufficient answer includes source IDs that `clihow` checks against the exact evidence packet sent to Luna. The response contract has an explicit `insufficientEvidence` result for questions the packet cannot support.
 
-When a scoped primitive declares an `ask` binding, clihow instead invokes that exact read-only method with the question as its sole required argument. The binding is accepted only when deterministic validation confirms the method, risk, and parameter shape. Interactive delegated runs tee the target's stdout and stderr to the terminal while capturing the final stdout answer; `--json` captures the result without terminal redraws. `--show-prompt` prints a dry-run invocation with `prompt: null`, because clihow sends no model prompt on this delegated path. `--trace-prompts` is rejected for delegated asks rather than silently producing an empty trace.
+A learned primitive can declare one validated read-only question method. In that case, a scoped ask calls that method instead of sending another model prompt. The `agentconvos` primitive uses this path to search conversation history while its Rich progress display stays visible.
 
-### Continue an ask across terminals
+## Continue a question later
 
-Every successful `ask`—model-backed or delegated—is stored as a durable logical
-thread. The transcript is the source of continuity, not a hidden Pi/Luna or
-provider session:
+Every successful ask becomes a durable thread. The transcript provides continuity, so follow-ups do not depend on a hidden provider session.
 
 ```bash
-# Start a thread. Plain output keeps the answer on stdout and prints its ID/hint on stderr.
-clihow ask agentconvos "find the conversation where I created the MCP selector launcher"
+# Start a research thread.
+clihow ask agentconvos \
+  "find the conversation where I created the MCP selector launcher"
 
-# Continue it from any terminal; the stored scope is restored automatically.
-clihow ask --thread THREAD_ID "What repository did that work create?"
+# Continue the same research from another terminal.
+clihow ask --thread THREAD_ID \
+  "Which repository did that work create?"
 
-# In an interactive terminal, prompt once for the follow-up question.
-clihow ask --thread THREAD_ID
-
-# Browse the same threads through agentconvos' Textual picker or fzf finder.
+# Browse with the agentconvos Textual interface or fzf.
 clihow threads
 clihow threads --find "MCP selector"
 
-# Inspect the newest-first inventory without starting another process.
+# Read the newest-first inventory without opening a TUI.
 clihow threads --json
 ```
 
-Threads live at `$CLIHOW_HOME/threads/*.jsonl`, defaulting to
-`~/.local/share/clihow/threads`. Thread files are mode `0600`; the containing
-thread and lock directories are private. UUID prefixes are accepted when they
-resolve uniquely. There is no implicit global `last`: use the explicit thread
-ID or the picker. JSON ask output includes `threadId`; plain output preserves
-the answer and writes a `Thread:`/`Continue:` hint to stderr. `--show-prompt`
-reads or renders context without creating or changing a thread.
+Plain output keeps the answer on stdout and writes the thread ID and continuation hint to stderr. JSON output includes `threadId`. UUID prefixes work when they identify one thread. There is no global `last` thread, so two terminals cannot silently continue each other's work.
 
-A clihow thread is a research transcript, not a native Claude, Codex, Pi, Agy,
-or OpenCode session. Continue the research with `clihow ask --thread
-THREAD_ID`; resume a cited native session separately with its original agent
-ID. Earlier clihow answers are navigation context—not authoritative evidence—
-so follow-ups re-check the underlying learned evidence or cited source turns.
-Interactive delegated asks keep the underlying agentconvos Rich cockpit visible
-while clihow captures and persists only the completed stdout answer; cockpit
-control output from stderr is not stored in the thread.
+Threads live under `~/.local/share/clihow/threads`. Files use mode `0600`, and the thread and lock directories use mode `0700`. Earlier answers are navigation context. A follow-up rechecks the learned evidence or the native conversation turns cited by the previous answer.
 
-### Call a method
+The interactive `threads` and `threads --find` commands require [agentconvos](https://github.com/testy-cool/agentconvos). Core learning, inspection, calling, and JSON thread inventory do not.
 
-```bash
-clihow call <primitive>.<method> \
-  --args-json '{"name":"Ada"}' \
-  --dry-run \
-  --json
-```
-
-Remove `--dry-run` to execute. Methods classified as `write` or `destructive` require `--yes`. `clihow` deterministically escalates obvious mutation verbs such as `create`, `update`, and `delete`; it never downgrades the compiler's risk classification.
-
-### Use natural language
-
-```bash
-clihow use <primitive> "list the ten newest repositories" --dry-run --json
-```
-
-Pi selects one learned method and binds its arguments. `clihow` then validates that selection against the manifest before planning or executing it. Prefer `call` once an agent already knows the method contract.
-
-### Inspect model prompts
+## Inspect every model prompt
 
 Print the exact next prompt without contacting Pi:
 
@@ -150,9 +171,7 @@ clihow use gh "list the ten newest repositories" --show-prompt
 clihow ask gh "How do I list repositories?" --show-prompt
 ```
 
-Add `--json` when a machine-readable object with a `prompt` field is easier to inspect. Previewing `use` or `ask` has no execution side effects. A delegated scoped ask reports `prompt: null` and its exact dry-run argv. Previewing `learn` still runs the bounded version and help probes needed to construct the evidence packet, but it does not contact Pi, validate a model response, or save a primitive.
-
-Record the prompts that are actually sent and the captured Pi responses from a normal operation:
+Record the prompts and captured Pi responses from a normal run:
 
 ```bash
 clihow ask gh "How do I list repositories?" \
@@ -160,20 +179,34 @@ clihow ask gh "How do I list repositories?" \
   --json
 ```
 
-Each model exchange becomes a user-only JSON file containing the engine, exact prompt, captured response (Pi stdout), captured stderr, exit status, timing, and truncation state. Stdout and stderr are each captured up to 1 MiB and can be truncated; the trace's `truncated` field records when either stream exceeded that limit. A learning repair attempt creates another trace file. Trace files can contain user intent and complete learned help evidence, so choose the directory deliberately and treat it as sensitive. `--show-prompt` and `--trace-prompts` cannot be combined.
+Each exchange is saved as JSON that only your user account can read. The record includes the engine, exact prompt, captured stdout and stderr, exit status, duration, and truncation state. A trace can contain your intent and the complete captured help, so keep the directory private. `--show-prompt` and `--trace-prompts` cannot be combined.
 
-### Verify and diagnose
+## Use clihow from an agent
+
+The repository includes an agent skill at [`skills/clihow/SKILL.md`](skills/clihow/SKILL.md). Link it into Codex from a source checkout:
 
 ```bash
-clihow test <primitive> --json
-clihow doctor --json
+mkdir -p ~/.codex/skills
+ln -s "$PWD/skills/clihow" ~/.codex/skills/clihow
 ```
 
-`test` re-hashes the binary and runs only stored help probes. `doctor` checks Pi, the locked provider/model pair, and registry writability.
+Other agents can use the same skill text or call the JSON commands directly. The skill teaches the public `clihow` contract. Agents do not need to know that Pi and Luna implement learning and method selection.
 
-## Registry
+## Safety and scope
 
-The default registry is:
+`clihow` reduces command guessing. It cannot make an untrusted executable safe.
+
+- Learning executes the target with version and help arguments. Do not learn a binary you would not run yourself.
+- Help text and model output are untrusted input. Luna receives no tools, and deterministic validation rejects unsupported output.
+- Calls use the resolved executable path and check its SHA-256 fingerprint before execution.
+- Arguments go directly to the child process. Shell syntax remains plain argument data.
+- Methods marked `write` or `destructive` require `--yes`. `clihow` also raises the risk for obvious mutation verbs such as `create`, `update`, and `delete`.
+- Grounded answers are still model-generated. Inspect consequential guidance before turning it into a call.
+- Risk classification can be imperfect. Review a new manifest before approving a consequential method.
+
+## Data and configuration
+
+The default registry is local:
 
 ```text
 ~/.local/share/clihow/primitives/<name>/manifest.json
@@ -181,26 +214,9 @@ The default registry is:
 ~/.local/share/clihow/threads/<uuid>.jsonl
 ```
 
-Set `CLIHOW_HOME` to isolate another registry. Files are replaced atomically and written with user-only permissions.
+Set `CLIHOW_HOME` to use another registry. `CLIHOW_PI_BINARY` overrides the Pi executable for tests or a custom installation. Registry files are replaced atomically and written with user-only permissions.
 
-The published manifest contract is also available at [`schema/primitive-manifest.schema.json`](schema/primitive-manifest.schema.json).
-
-## Agent skill
-
-The package includes [`skills/clihow/SKILL.md`](skills/clihow/SKILL.md). Install or link that folder into an agent's skill directory when automatic discovery is useful. The skill teaches agents the public command contract and deliberately treats the Pi/Luna implementation as replaceable.
-
-## Security boundary
-
-`clihow` reduces improvisation; it does not make an untrusted executable safe.
-
-- Learning executes the target binary with `--version`, `-V`, `--help`, `-h`, and discovered `<subcommand> --help` probes. Do not learn a binary you would not otherwise execute.
-- Learning uses isolated temporary HOME and XDG directories. Paths derived from that sandbox are stored and queried as `<clihow-learning-home>`, never presented as persistent user-data locations.
-- Help output is untrusted prompt data. Pi receives no tools and cannot execute it.
-- Grounded answers are model-generated even though their source IDs are validated. Inspect consequential guidance before turning it into a call.
-- Model output is not trusted. Runtime validation rejects unknown evidence, invented commands/options, malformed types, duplicate names, and unsafe probe shapes.
-- Calls use the resolved executable path and check its SHA-256 fingerprint first.
-- Arguments are passed directly to `spawn`; shell syntax remains literal data.
-- Semantic risk classification can still be imperfect. Inspect newly learned manifests before approving consequential calls.
+The manifest format is published at [`schema/primitive-manifest.schema.json`](schema/primitive-manifest.schema.json).
 
 ## Development
 
@@ -210,8 +226,12 @@ pnpm build
 pnpm check
 ```
 
-The integration suite uses real fixture executables rather than PTY or shell mocks. A release should also pass a live Pi learning canary and a globally installed CLI canary.
+The test suite uses executable fixtures rather than shell mocks. A release should also pass a live Pi learning canary, a deterministic call, and a globally installed CLI canary.
 
-## Status
+## Current status
 
-`clihow` is an early primitive with self-describing help and grounded Q&A over its local registry. Deeper recursive command discovery, replay fixtures for learned third-party tools, and packaged npm/Homebrew releases are natural follow-ups after the contract survives use in more than one real workflow.
+`clihow` is an early preview. Installation is available only from source. Learning currently requires Pi with `openai-codex/gpt-5.6-luna`, and learned primitives are tied to the path and fingerprint of binaries on the current machine. An npm or Homebrew release, deeper recursive command discovery, and portable replay fixtures are not available yet.
+
+## License
+
+[MIT](LICENSE)

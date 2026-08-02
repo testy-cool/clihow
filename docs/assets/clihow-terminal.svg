@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="258" role="img" aria-labelledby="title desc">
+  <title id="title">clihow terminal demo</title>
+  <desc id="desc">clihow learns the included demo CLI, calls its greet method, and passes all stored probes.</desc>
+  <style>
+    .bg { fill: #1e1e2e; }
+    .bar { fill: #313244; }
+    .dot-r { fill: #f38ba8; }
+    .dot-y { fill: #f9e2af; }
+    .dot-g { fill: #a6e3a1; }
+    .title { fill: #cdd6f4; font-family: ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace; font-size: 13px; }
+    .t { fill: #cdd6f4; font-family: ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace; font-size: 13.5px; }
+    .dim { fill: #6c7086; }
+    .cyan { fill: #89dceb; }
+    .green { fill: #a6e3a1; }
+    .bold { font-weight: bold; }
+    .prompt { fill: #cba6f7; }
+  </style>
+
+  <rect class="bg" width="720" height="258" rx="10"/>
+  <rect class="bar" width="720" height="36" rx="10"/>
+  <rect class="bg" x="0" y="26" width="720" height="10"/>
+  <circle class="dot-r" cx="20" cy="13" r="6"/>
+  <circle class="dot-y" cx="40" cy="13" r="6"/>
+  <circle class="dot-g" cx="60" cy="13" r="6"/>
+  <text class="title" x="360" y="17" text-anchor="middle">clihow</text>
+
+  <text class="t prompt" x="16" y="62">$</text>
+  <text class="t" x="30" y="62">clihow learn ./fixtures/demo-cli.mjs --name demo</text>
+  <text class="t green bold" x="30" y="84">Learned demo: 3 methods, 3 probes passed</text>
+
+  <text class="t prompt" x="16" y="118">$</text>
+  <text class="t" x="30" y="118">clihow call demo.greet --args-json</text>
+  <text class="t cyan" x="344" y="118">'{"name":"Ada","loud":true}'</text>
+  <text class="t green bold" x="30" y="140">HELLO, ADA!</text>
+
+  <text class="t prompt" x="16" y="174">$</text>
+  <text class="t" x="30" y="174">clihow test demo</text>
+  <text class="t green bold" x="30" y="196">PASS demo: 3/3 probes</text>
+
+  <rect x="26" y="216" width="668" height="26" rx="6" stroke="#45475a" stroke-width="1" fill="none"/>
+  <text class="t dim" x="42" y="234">learn once</text>
+  <text class="t cyan" x="160" y="234">inspectable methods</text>
+  <text class="t dim" x="340" y="234">exact argv</text>
+  <text class="t green" x="464" y="234">verified before use</text>
+</svg>

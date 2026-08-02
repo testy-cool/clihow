@@ -1,8 +1,16 @@
 {
   "name": "clihow",
   "version": "0.1.0",
-  "description": "Learn installed CLIs into tested, agent-discoverable primitives.",
+  "description": "Learn a CLI once, then let every coding agent discover and call its tested methods.",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/testy-cool/clihow.git"
+  },
+  "homepage": "https://github.com/testy-cool/clihow#readme",
+  "bugs": {
+    "url": "https://github.com/testy-cool/clihow/issues"
+  },
   "bin": {
     "clihow": "./dist/cli.js"
   },
@@ -10,6 +18,7 @@
     "dist",
     "skills",
     "schema",
+    "docs/assets",
     "README.md",
     "LICENSE"
   ],
