@@ -13,11 +13,7 @@ Turn installed commands into tested methods that you, Codex, Claude, Pi, and oth
 </div>
 
 <p align="center">
-  <img src="docs/assets/clihow-banner.png" alt="Abstract command fragments passing through a compass-like verifier into reusable methods shared by several agents" width="720">
-</p>
-
-<p align="center">
-  <img src="docs/assets/clihow-terminal.svg" alt="clihow learning, calling, and testing the included demo CLI" width="720">
+  <img src="docs/assets/clihow-terminal.svg" alt="Verified clihow run learning Git, executing git status in a clean checkout, and passing every stored probe" width="720">
 </p>
 
 `clihow` reads a command's own help, turns it into a small local method manifest, and tests each method before saving it. You and your agents can inspect that manifest, choose a method from plain language, preview the exact arguments, or call the method directly.
@@ -56,43 +52,37 @@ clihow doctor
 
 ## Quick start
 
-The repository includes a harmless demo CLI, so you can run the complete loop without giving `clihow` access to another tool.
+Run the first loop against Git itself from inside any Git checkout. This is a real target: `clihow` reads the installed Git binary and its help, then saves only methods that survive validation and help probes.
 
 ```bash
-# Read its help, compile a small manifest, and run every generated help probe.
-clihow learn ./fixtures/demo-cli.mjs --name demo
+# Read Git's help, compile a small manifest, and run every generated help probe.
+clihow learn git
 
 # Read the compact guide that agents discover.
-clihow help demo
-
-# Inspect the exact stored method and parameter names.
-clihow describe demo --json
+clihow help git
 
 # Let Luna bind plain language, but stop before execution.
-clihow use demo "greet Ada loudly" --dry-run --json
+clihow use git "show working tree status" --dry-run --json
 
-# In one verified run, describe returned this direct-call contract.
-clihow call demo.greet --args-json '{"name":"Ada","loud":true}'
+# Run the validated argument vector.
+clihow use git "show working tree status"
 
 # Recheck the binary and every stored probe.
-clihow test demo
+clihow test git
 ```
 
-That verified run produced:
+One verified run with Git 2.43.0 compiled five read-only methods. The dry run selected `git.status`, built `argv: ["status"]`, and did not execute it. The subsequent real call ran `/usr/bin/git status` in a clean checkout:
 
 ```text
-Learned demo: 3 methods, 3 probes passed
-HELLO, ADA!
-PASS demo: 3/3 probes
+Learned git: 5 methods, 5 probes passed
+On branch main
+Your branch is up to date with 'origin/main'.
+
+nothing to commit, working tree clean
+PASS git: 5/5 probes
 ```
 
-Learn a tool you already use in the same way:
-
-```bash
-clihow learn gh
-clihow help gh
-clihow use gh "list the ten newest repositories" --dry-run --json
-```
+The exact method set can vary with the installed Git help and the generated manifest. Inspect `clihow help git` before relying on a method name in automation.
 
 ## Commands
 

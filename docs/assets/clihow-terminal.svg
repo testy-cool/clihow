@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="720" height="258" role="img" aria-labelledby="title desc">
-  <title id="title">clihow terminal demo</title>
-  <desc id="desc">clihow learns the included demo CLI, calls its greet method, and passes all stored probes.</desc>
+  <title id="title">clihow learns and uses Git</title>
+  <desc id="desc">A verified clihow run learns Git, executes git status in a clean checkout, and passes all five stored probes.</desc>
   <style>
     .bg { fill: #1e1e2e; }
     .bar { fill: #313244; }
@@ -25,20 +25,19 @@
   <text class="title" x="360" y="17" text-anchor="middle">clihow</text>
 
   <text class="t prompt" x="16" y="62">$</text>
-  <text class="t" x="30" y="62">clihow learn ./fixtures/demo-cli.mjs --name demo</text>
-  <text class="t green bold" x="30" y="84">Learned demo: 3 methods, 3 probes passed</text>
+  <text class="t" x="30" y="62">clihow learn git</text>
+  <text class="t green bold" x="30" y="84">Learned git: 5 methods, 5 probes passed</text>
 
   <text class="t prompt" x="16" y="118">$</text>
-  <text class="t" x="30" y="118">clihow call demo.greet --args-json</text>
-  <text class="t cyan" x="344" y="118">'{"name":"Ada","loud":true}'</text>
-  <text class="t green bold" x="30" y="140">HELLO, ADA!</text>
+  <text class="t" x="30" y="118">clihow use git "show working tree status"</text>
+  <text class="t cyan" x="30" y="140">nothing to commit, working tree clean</text>
 
   <text class="t prompt" x="16" y="174">$</text>
-  <text class="t" x="30" y="174">clihow test demo</text>
-  <text class="t green bold" x="30" y="196">PASS demo: 3/3 probes</text>
+  <text class="t" x="30" y="174">clihow test git</text>
+  <text class="t green bold" x="30" y="196">PASS git: 5/5 probes</text>
 
   <rect x="26" y="216" width="668" height="26" rx="6" stroke="#45475a" stroke-width="1" fill="none"/>
-  <text class="t dim" x="42" y="234">learn once</text>
+  <text class="t dim" x="42" y="234">real Git 2.43.0</text>
   <text class="t cyan" x="160" y="234">inspectable methods</text>
   <text class="t dim" x="340" y="234">exact argv</text>
   <text class="t green" x="464" y="234">verified before use</text>
