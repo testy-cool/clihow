@@ -39,7 +39,7 @@ Report a failed doctor check instead of guessing how to repair the underlying CL
 
 Use `ask` to discover or explain what the registry supports. In an unscoped question, `you` and `your` refer to clihow; use the explicit `clihow` scope when only its own runtime and storage contract should be considered. Treat `insufficientEvidence: true` as a hard limit instead of filling gaps from memory. Prefer `describe` plus `call` when deterministic behavior matters. Use `use` when choosing and binding the method is itself the hard part.
 
-Scoped ask has a deliberate delegation path. When a learned manifest declares an `ask` binding, clihow validates that it names exactly one required positional `string` or `string[]` parameter on a `read` method, then invokes that method through the normal binary-fingerprint and shell-free argv path. This means a scoped ask can execute a learned read-only method; it is not a promise that the target binary will never run. Interactive non-JSON runs inherit the target's terminal for native progress or a TUI, while JSON and non-TTY runs capture the invocation result. If no valid binding is present, scoped ask falls back to grounded registry Q&A through Pi.
+Scoped ask has a deliberate delegation path. When a learned manifest declares an `ask` binding, clihow validates that it names exactly one required positional `string` or `string[]` parameter on a `read` method, then invokes that method through the normal binary-fingerprint and shell-free argv path. This means a scoped ask can execute a learned read-only method; it is not a promise that the target binary will never run. Plain non-JSON runs tee the target's stdout and stderr immediately. In a real terminal, compatible targets such as agentconvos can render their Rich cockpit; non-TTY agent subprocesses receive live plain-text progress instead. JSON runs stay captured so stdout remains machine-clean. If no valid binding is present, scoped ask falls back to grounded registry Q&A through Pi.
 
 ## Inspect prompts
 
@@ -78,6 +78,7 @@ re-check the underlying learned evidence or cited native source turns before
 relying on a material claim.
 
 `clihow threads` and `clihow threads --find` reuse agentconvos' Textual/fzf
-surfaces. An interactive delegated ask preserves the agentconvos Rich cockpit
-through tee capture and stores only the completed stdout answer, not stderr
-control output. `--show-prompt` is non-mutating and does not publish a thread.
+surfaces. A plain delegated ask preserves the agentconvos Rich cockpit on a TTY
+and streams its stage updates when called without one. Clihow stores only the
+completed stdout answer, not stderr control output. `--show-prompt` is
+non-mutating and does not publish a thread.

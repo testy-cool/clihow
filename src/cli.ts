@@ -658,9 +658,8 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
             `Scoped ask for ${requestedScope.name} delegates directly and does not use a clihow model prompt`,
           );
         }
-        const interactiveDelegate = Boolean(
-          io.interactive && !optionBoolean(parsed, "--json") && !preview,
-        );
+        const streamDelegate = Boolean(!optionBoolean(parsed, "--json") && !preview);
+        const interactiveDelegate = Boolean(io.interactive && streamDelegate);
         const invocation = await executeMethod(
           requestedScope,
           binding.method,
@@ -669,11 +668,11 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
           },
           {
             dryRun: preview,
-            stdio: interactiveDelegate ? "tee" : "capture",
+            stdio: streamDelegate ? "tee" : "capture",
             env: interactiveDelegate
               ? { ...io.env, CLIHOW_STREAM_TTY: "1" }
               : io.env,
-            ...(interactiveDelegate
+            ...(streamDelegate
               ? { onStdout: io.stdout, onStderr: io.stderr }
               : {}),
             timeoutMs: 10 * 60_000,
@@ -740,7 +739,7 @@ async function dispatch(args: string[], io: CliIo): Promise<number> {
             invocation,
             ...(threadId ? { threadId } : {}),
           });
-        } else if (!interactiveDelegate) {
+        } else if (!streamDelegate) {
           if (invocation.stdout) io.stdout(invocation.stdout);
           if (invocation.stderr) io.stderr(invocation.stderr);
         }

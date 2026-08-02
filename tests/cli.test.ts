@@ -216,6 +216,50 @@ test("interactive delegated asks tee the cockpit and persist stdout only", async
   }
 });
 
+test("non-interactive plain delegated asks stream progress before the answer", async () => {
+  const { runCli } = await import("../src/cli.ts");
+  const { listThreads } = await import("../src/threads.ts");
+  const root = await mkdtemp(join(tmpdir(), "clihow-question-stream-"));
+  const binaryPath = join(root, "progress-question.mjs");
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  const events: string[] = [];
+  try {
+    await writeFile(
+      binaryPath,
+      "#!/usr/bin/env node\nprocess.stderr.write(`PROGRESS:${process.env.CLIHOW_STREAM_TTY ?? 'missing'}\\n`); setTimeout(() => process.stdout.write(`FINAL:${process.argv[3]}\\n`), 25);\n",
+      { encoding: "utf8", mode: 0o700 },
+    );
+    await chmod(binaryPath, 0o700);
+    await saveQuestionPrimitive(root, binaryPath);
+
+    assert.equal(
+      await runCli(["ask", "demo", "live question"], {
+        env: { ...process.env, CLIHOW_HOME: root },
+        stdout: (value: string) => {
+          stdout.push(value);
+          events.push(`stdout:${value}`);
+        },
+        stderr: (value: string) => {
+          stderr.push(value);
+          events.push(`stderr:${value}`);
+        },
+        interactive: false,
+      }),
+      0,
+    );
+
+    assert.equal(events[0], "stderr:PROGRESS:missing\n");
+    assert.equal(stdout.join(""), "FINAL:live question\n");
+    assert.match(stderr.join(""), /^PROGRESS:missing\nThread: [0-9a-f-]{36}/);
+    const thread = (await listThreads(root))[0];
+    assert.equal(thread?.turns[1]?.text, "FINAL:live question");
+    assert.doesNotMatch(JSON.stringify(thread), /PROGRESS:/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("persists model-backed asks and continues the same UUID with bounded history", async () => {
   const { runCli } = await import("../src/cli.ts");
   const { listThreads } = await import("../src/threads.ts");
